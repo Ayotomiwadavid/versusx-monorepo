@@ -1,1 +1,1 @@
-# versusx
+# versusx Smart contracts 
