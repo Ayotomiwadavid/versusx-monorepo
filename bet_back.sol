@@ -91,7 +91,7 @@ contract ESkillzStraightBet is MetaKeepLambda {
 
     function  CreateSPGame(address _sender, uint256 amount) external onlySportContract{
       require(minBetAmounts<= amount, "Bet amounts must be bigger than minBetAmounts");
-      totalAmountsOfDay[block.timestamp] +=amount;
+      totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] +=amount;
       GameIDs++;
       ISport(sport).transferFrom(_sender, address(this), amount);
       delete(gamebetting[GameIDs]);
@@ -101,7 +101,7 @@ contract ESkillzStraightBet is MetaKeepLambda {
 
     function CreateSPGameByToken(address _sender, uint256 amount) external {
         require(amount > 0, "Bet amounts must be bigger than zero");
-        // totalAmountsOfDay[block.timestamp] += amount;
+        // totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] += amount;
         GameIDs++;
         delete(gamebetting[GameIDs]);
         gamebetting[GameIDs].push(Bet(_sender, amount, 0, 1));
@@ -117,14 +117,14 @@ contract ESkillzStraightBet is MetaKeepLambda {
         ISport(sport).mintMore(winner, gamebetting[GameID][0].amount*result/100);
         ISport(sport).transfer(winner, amountToWinner);
         ISport(sport).transfer(feeReceiver, amountToESkillz);
-        if(totalAmountsOfDay[block.timestamp] >= (gamebetting[GameID][0].amount)){
+        if(totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] >= (gamebetting[GameID][0].amount)){
 
-            totalAmountsOfDay[block.timestamp] -=(gamebetting[GameID][0].amount);
+            totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] -=(gamebetting[GameID][0].amount);
         }
         else{
             if((block.timestamp- startTimeStamp)/ 1 days > 0){
 
-                totalAmountsOfDay[block.timestamp - 1] -=(gamebetting[GameID][0].amount);
+                totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days - 1] -=(gamebetting[GameID][0].amount);
             }
         }
         delete(gamebetting[GameID]);
@@ -141,7 +141,7 @@ contract ESkillzStraightBet is MetaKeepLambda {
 
     function CreateMPGame(address _sender, uint256 amount) external onlySportContract{
         require(minBetAmounts<= amount, "Bet amounts must be bigger than minBetAmounts");
-        totalAmountsOfDay[block.timestamp] += amount;
+        totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] += amount;
         GameIDs++;
         ISport(sport).transferFrom(_sender, address(this), amount);
         delete(gamebetting[GameIDs]);
@@ -151,7 +151,7 @@ contract ESkillzStraightBet is MetaKeepLambda {
 
     function CreateMPGameByToken(address _sender, uint256 amount) external{
         require(amount > 0, "Bet amounts must be bigger than zero");
-        // totalAmountsOfDay[block.timestamp] += sportAmount;
+        // totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] += sportAmount;
         GameIDs++;
         delete(gamebetting[GameIDs]);
         gamebetting[GameIDs].push(Bet(_sender, amount, 1, 1));
@@ -171,7 +171,7 @@ contract ESkillzStraightBet is MetaKeepLambda {
         require(gamebetting[gameID][0].player != _sender, "Same Players can not join.");
         require(amount== gamebetting[gameID][0].amount, "Your bet amount must equals create amount");
         require(gamebetting[gameID][0].gameType == 1, "You can join the MP game only");
-        totalAmountsOfDay[block.timestamp] += amount;
+        totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] += amount;
         ISport(sport).transferFrom(_sender, address(this), amount);
         gamebetting[gameID].push(Bet(_sender, amount, 1, 0));
         emit BetEvent(gameID, amount);
@@ -182,7 +182,7 @@ contract ESkillzStraightBet is MetaKeepLambda {
         require(gamebetting[gameID][0].player != _sender, "Same Players can not join.");
         require(amount== gamebetting[gameID][0].amount, "Your bet amount must equals create amount");
         require(gamebetting[gameID][0].gameType == 1, "You can join the MP game only");
-        // totalAmountsOfDay[block.timestamp] += sportAmount;
+        // totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] += sportAmount;
         // IERC20(_tokenAddr).transferFrom(_sender, treasury, amount);
         gamebetting[gameID].push(Bet(_sender, amount, 1, 1));
         emit BetEvent(gameID, amount);
@@ -288,7 +288,7 @@ contract ESkillzStraightBet is MetaKeepLambda {
 
     function getAvailableAmountOfContract() external view returns(uint256){
         if((block.timestamp- startTimeStamp)/ 1 days > 0){
-            return ISport(sport).balanceOf(address(this)) - totalAmountsOfDay[block.timestamp] - totalAmountsOfDay[block.timestamp - 86400];
+            return ISport(sport).balanceOf(address(this)) - totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] - totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days - 1];
         }
         else{
             return 0;
@@ -297,7 +297,7 @@ contract ESkillzStraightBet is MetaKeepLambda {
 
     function withdraw(address _feeReceiver, uint256 _amount) external {
         require((block.timestamp- startTimeStamp)/ 1 days > 0 ,"withdraw day should be bigger than start day + 1 day.");
-        uint256 remainAmounts = totalAmountsOfDay[block.timestamp] + totalAmountsOfDay[block.timestamp - 86400];
+        uint256 remainAmounts = totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] + totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days - 1];
         require(ISport(sport).balanceOf(address(this)) - _amount > remainAmounts, "Balance must be bigger than amount + bettingAmounts of today and yesterday.");
         require(feeReceiver == _feeReceiver || owner == _msgSender(), "msg sender must be feeReceiver or contract owner");
         ISport(sport).transfer(feeReceiver, _amount);         
@@ -306,7 +306,7 @@ contract ESkillzStraightBet is MetaKeepLambda {
     function withdrawAll(address _feeReceiver) external{
 
         require((block.timestamp- startTimeStamp)/ 1 days > 0 ,"withdraw day should be bigger than start day + 1 day.");
-        uint256 remainAmounts = totalAmountsOfDay[block.timestamp] + totalAmountsOfDay[block.timestamp - 86400];
+        uint256 remainAmounts = totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days] + totalAmountsOfDay[(block.timestamp- startTimeStamp)/ 1 days - 1];
         require(ISport(sport).balanceOf(address(this)) > remainAmounts, "Balance must be bigger than amount + bettingAmounts of today and yesterday.");
         require(feeReceiver == _feeReceiver || owner == _msgSender(), "msg sender must be feeReceiver or contract owner");
         ISport(sport).transfer(feeReceiver, ISport(sport).balanceOf(address(this)) - remainAmounts);      

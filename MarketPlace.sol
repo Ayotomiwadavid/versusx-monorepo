@@ -233,9 +233,7 @@ contract NFTMarket is
             address(this),
             idToMarketItem[itemId].tokenId
         );
-        (bool success, ) = payable(owner()).call{value: msg.value}("");
-        require(success, "ERROR in tranfer");
-        //payable(owner()).transfer(msg.value);
+        payable(owner()).transfer(msg.value);
 
         idToMarketItem[itemId].onSale = true;
         idToMarketItem[itemId].lastSeller = msg.sender;
@@ -285,9 +283,7 @@ contract NFTMarket is
             msg.sender,
             idToMarketItem[itemId].tokenId
         );
-        //idToMarketItem[itemId].owner.transfer(msg.value);
-        (bool success, ) = payable(idToMarketItem[itemId].owner).call{value: msg.value}("");
-        require(success, "ERROR in tranfer");
+        idToMarketItem[itemId].owner.transfer(msg.value);
         if (idToMarketItem[itemId].owner == owner()) {
             totalEarnedAmounts = totalEarnedAmounts + msg.value;
         }
@@ -639,9 +635,7 @@ contract NFTMarket is
         onlyMetaKeepLambdaOwner
         returns (bool)
     {
-        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
-        require(success, "ERROR in tranfer");
-        //payable(owner()).transfer(address(this).balance);
+        payable(owner()).transfer(address(this).balance);
         return true;
     }
 }

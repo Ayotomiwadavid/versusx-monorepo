@@ -82,6 +82,10 @@ contract SPORT is MetaKeepLambda, IERC20 {
     mapping (address => uint256) _balances;
     mapping (address => mapping (address => uint256)) _allowances;
 
+    // address public distributor;
+    // uint256 public distributionFee ;
+    // uint256 public feeDenominator ;
+
     IDEXRouter public router;
     address public pair;
 

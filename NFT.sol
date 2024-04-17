@@ -203,9 +203,7 @@ contract NFT is
         //require(msg.value == listingPrice, "Amount doesn't meet listing fees requirements (.0025eth)");
         //payable(marketplaceAddress).transfer(msg.value);
         safeTransferFrom(_msgSender(), marketplaceAddress, tokenId);
-        (bool success, ) = payable(INFTMarket(marketplaceAddress).owner()).call{value: msg.value}("");
-        require(success, "ERROR in tranfer");
-       // payable(INFTMarket(marketplaceAddress).owner()).transfer(msg.value);
+        payable(INFTMarket(marketplaceAddress).owner()).transfer(msg.value);
         INFTMarket(marketplaceAddress).calcEarnedFeeAmounts(msg.value);
         INFTMarket(marketplaceAddress).listItemOnSaleFromNFTContract(
             itemId,
@@ -247,9 +245,7 @@ contract NFT is
             //require(msg.value == listingPrice, "Amount doesn't meet listing fees requirements (.0025eth)");
             //payable(marketplaceAddress).transfer(msg.value);
             safeTransferFrom(_msgSender(), marketplaceAddress, tokenId[i]);
-            (bool success, ) = payable(INFTMarket(marketplaceAddress).owner()).call{value: msg.value}("");
-            require(success, "ERROR in tranfer");
-            //payable(INFTMarket(marketplaceAddress).owner()).transfer(msg.value);
+            payable(INFTMarket(marketplaceAddress).owner()).transfer(msg.value);
             INFTMarket(marketplaceAddress).calcEarnedFeeAmounts(msg.value);
             INFTMarket(marketplaceAddress).listItemOnSaleFromNFTContract(
                 itemId[i],

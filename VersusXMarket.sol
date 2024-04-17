@@ -215,15 +215,11 @@ contract VersusXMarket is
             );
         }
 
-        //idToMarketItem[itemId].seller.transfer(msg.value);
-        (bool success, ) = payable(idToMarketItem[itemId].seller).call{value: msg.value}("");
-        require(success, "ERROR in tranfer");
+        idToMarketItem[itemId].seller.transfer(msg.value);
         idToMarketItem[itemId].owner = payable(msg.sender);
         idToMarketItem[itemId].sold = true;
 
-        (bool success, ) = payable(owner()).call{value: listingPrice}("");
-        require(success, "ERROR in tranfer");
-        //payable(owner()).transfer(listingPrice);
+        payable(owner()).transfer(listingPrice);
     }
 
     function fetchMarketItems(
@@ -259,9 +255,7 @@ contract VersusXMarket is
     }
 
     function withdrawAll() public payable onlyOwner returns (bool) {
-        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
-        require(success, "ERROR in tranfer");
-        //payable(owner()).transfer(address(this).balance);
+        payable(owner()).transfer(address(this).balance);
         return true;
     }
 
