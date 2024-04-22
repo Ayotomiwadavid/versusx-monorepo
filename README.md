@@ -1,1 +1,1 @@
-# versusx Smart contracts 
+# versusx smart contracts and api server
