@@ -2,9 +2,9 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 const Web3 = require('web3');
-const { ethers } = require('ethers');
+const { ethers, Contract } = require('ethers');
 require('dotenv').config();
-const CONFIG = require('./../../config')
+const CONFIG = require('./../../config');
 const FormData = require('form-data');
 const fs = require('fs');
 
@@ -34,13 +34,12 @@ const db = initializeFirestore(app, {
   experimentalAutoDetectLongPolling: true
 });
 
-
 const initMoralis = async () => {
   await Moralis.default.start({
     apiKey: process.env.MORALIS_KEY
   });
-} 
-  
+};
+
 initMoralis();
 const options = {
   reconnect: {
@@ -97,6 +96,7 @@ var TournamentLambda = process.env.TOURNAMENTLAMBDA;
 var GetPriceLambda = process.env.GETPRICELAMBDA;
 var PolygonChainId = process.env.POLYGONCHAINID;
 var HoloPassNFTAddress = process.env.HOLOPASS_NFT;
+var latestNonce = 0;
 
 // let web3 = new Web3(new Web3.providers.HttpProvider('https://rpc-mumbai.maticvigil.com', options));
 let web3 = new Web3(infuraKey);
@@ -113,11 +113,14 @@ var marketCardContract = new web3.eth.Contract(
   process.env.CARD_MARKET_CONTRACT_ADDRESS
 );
 
-const MarketContractInfo = require('./../../abi/VersusXMarket.json')
-let MarketContract = new web3.eth.Contract(MarketContractInfo.abi, process.env.VERSUSX_MARKET_ADDRESS);
+const MarketContractInfo = require('./../../abi/VersusXMarket.json');
+let MarketContract = new web3.eth.Contract(
+  MarketContractInfo.abi,
+  process.env.VERSUSX_MARKET_ADDRESS
+);
 
-const VersusX721Info = require('./../../abi/VersusX721.json')
-const VersusX1155Info = require('./../../abi/VersusX1155.json')
+const VersusX721Info = require('./../../abi/VersusX721.json');
+const VersusX1155Info = require('./../../abi/VersusX1155.json');
 
 const axiosGet = async (resVal) => {
   try {
@@ -465,40 +468,43 @@ router.post('/fetchNftDetails', async function (req, res) {
     if (ID == null) {
       res.json({
         status: false,
-        msg: "ID is null",
+        msg: 'ID is null',
         data: null
       });
     } else {
       let nftData;
-      // nftData = await axios.get(`https://polygon-mumbai.g.alchemy.com/nft/v2/${process.env.ALCHEMY_KEY}/getNFTMetadata?contractAddress=${req.body.contract}&tokenId=${req.body.id}&refreshCache=false`).then(res => res.data).catch(e => null);
-
-      nftData = await Moralis.default.EvmApi.nft.getNFTMetadata({
-        "chain": process.env.MORALIS_POLYGON_CHAIN_ID,
-        "format": "decimal",
-        "normalizeMetadata": true,
-        "mediaItems": false,
-        "address": nftAddress,
-        "tokenId": tokenId
-      });
-      if (nftData == null) {
+      try {
+        nftData = await axios
+          .get(
+            `https://polygon-mainnet.g.alchemy.com/nft/v3/${process.env.ALCHEMY_KEY}/getNFTMetadata?contractAddress=${req.body.contract}&tokenId=${req.body.id}&refreshCache=false&refreshCache=true`
+          )
+          .then((res) => res.data)
+          .catch((e) => null);
+        if (nftData.data.error) {
+          return res.json({
+            status: false,
+            msg: 'NFT Metadata get error',
+            error: nftData.data.error
+          });
+        }
+        return res.json({
+          status: true,
+          msg: 'success',
+          data: nftData.data.metadata
+        });
+      } catch (e) {
         return res.json({
           status: false,
-          msg: "NFT Metadata not found",
-          data: nftData
+          msg: 'NFT Metadata not found'
         });
       }
-      res.json({
-        status: true,
-        msg: "success",
-        data: nftData
-      });
     }
     return;
   } catch (error) {
     console.log(error);
     res.json({
       status: false,
-      msg: "something went wrong",
+      msg: 'something went wrong',
       data: null
     });
     return;
@@ -513,19 +519,23 @@ router.post('/fetchNFTList', async function (req, res) {
     var address = req.body.address.toString().toLowerCase();
     let nftContract = req.body.nftContract;
     let page = req.body.page;
-    
-    const colData = await axios.post(process.env.ADMIN_URL + '/getCollectionInfo', {
-      name: NFTType
-    }, { 'Content-Type': `application/json` });
+
+    const colData = await axios.post(
+      process.env.ADMIN_URL + '/getCollectionInfo',
+      {
+        name: NFTType
+      },
+      { 'Content-Type': `application/json` }
+    );
 
     console.log(colData.data);
-    if(colData.data.status == false) {
+    if (colData.data.status == false) {
       return res.send({
         status: false,
         msg: 'The collection does not exist.'
       });
     }
-    
+
     let collectionInfo = colData.data.data;
 
     let nft_type = collectionInfo.collection_type;
@@ -534,53 +544,52 @@ router.post('/fetchNFTList', async function (req, res) {
     if (address == null || collectionAddress == null) {
       return res.json({
         status: false,
-        msg: "Wrong Parameter"
+        msg: 'Wrong Parameter'
       });
     } else {
-      // let nftListData = await axios.get(`https://polygon-mumbai.g.alchemy.com/nft/v2/${process.env.ALCHEMY_KEY}/getNFTs?owner=${address}&contractAddresses[]=${nftContract}&withMetadata=true&pageSize=100`);
-      
-      // let nftList = nftListData.data.ownedNfts;
-      let nftList = await Moralis.default.EvmApi.nft.getWalletNFTs({
-        "chain": process.env.MORALIS_POLYGON_CHAIN_ID,
-        "format": "decimal",
-        "tokenAddresses": [
-          collectionAddress
-        ],
-        "mediaItems": true,
-        "address": address
-      });
+      try {
+        const items = [];
+        let pageKey = '';
+        do {
+          let nftListData = await axios.get(
+            `https://polygon-mainnet.g.alchemy.com/nft/v3/${process.env.ALCHEMY_KEY}/getNFTsForOwner?owner=${address}&contractAddresses[]=${collectionAddress}&withMetadata=true&pageSize=100&refreshCache=true&pageKey=` +
+              pageKey
+          );
+          for (const nftItem of nftListData.data.ownedNfts) {
+            const metadata = nftItem.raw.metadata;
+            const balance = parseInt(nftItem['balance']);
+            for (let i = 0; i < balance; i++) {
+              items.push({
+                id: nftItem['tokenId'],
+                balance: 1,
+                address: collectionAddress,
+                thumbnail: metadata ? metadata['image_url'] : '',
+                title: NFTType,
+                description: metadata ? metadata['description'] : '',
+                metadata: metadata,
+                isOwned: true
+              });
+            }
+          }
+          console.log(nftListData);
+          pageKey = nftListData.data.pageKey;
+        } while (pageKey);
 
-      const items = await Promise.all(nftList.result.map(async nftItem => {
-        let contract, metadata = {}, nftInfo;
-        if (nft_type === 'ERC721') {
-          contract = new web3.eth.Contract(VersusX721Info.abi, collectionAddress);
-          nftInfo = await contract.methods.tokenURI(nftItem.tokenId).call();
-          metadata = await axiosGet(nftInfo);
-        } else {
-          contract = new web3.eth.Contract(VersusX1155Info.abi, collectionAddress);
-          nftInfo = await contract.methods.uri(nftItem.tokenId).call();
-          metadata = await axiosGet(nftInfo);
-        }
-        metadata = metadata.data;
-        return {
-          id: nftItem["tokenId"],
-          balance: nftItem["amount"],
-          address: nftItem["token_address"],
-          thumbnail: metadata?metadata["image_url"]:"",
-          title: nftItem["name"],
-          description: metadata?metadata["description"]:"",
-          metadata: metadata,
-          isOwned: true
-        };
-      }))
-      
-      return res.json({
-        status: true,
-        msg: "success",
-        count: items.length,
-        page: 1,
-        data: items
-      });
+        return res.json({
+          status: true,
+          msg: 'success',
+          count: items.length,
+          page: 1,
+          data: items
+        });
+      } catch (e) {
+        res.json({
+          status: 'false',
+          msg: 'Error at fetching nft list data from alchemy: ' + e
+        });
+        return;
+      }
+
       // if (gameType.trim().toLowerCase() == 'pool') {
       //   if (address.length == 42 && address.substring(0, 2) == '0x') {
       //     try {
@@ -617,10 +626,9 @@ router.post('/fetchNFTList', async function (req, res) {
       // }
     }
   } catch (error) {
-    console.error(error);
     return res.json({
       status: false,
-      msg: "Something went wrong."
+      msg: 'Something went wrong.'
     });
   }
 });
@@ -883,8 +891,8 @@ const pinJSONToIPFS = async (JSONBody) => {
     });
 };
 
-const pinFileToIPFS = async function(file) {
-  const url = 'https://api.pinata.cloud/pinning/pinFileToIPFS'; 
+const pinFileToIPFS = async function (file) {
+  const url = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
   const formData = new FormData();
   formData.append('file', file);
 
@@ -895,8 +903,8 @@ const pinFileToIPFS = async function(file) {
         pinata_secret_api_key: process.env.PINATA_SECRET_API_KEY,
         'Content-Type': `multipart/form-data; boundary=${formData._boundary}`
       },
-      'maxContentLength': Infinity,
-      'maxBodyLength': Infinity
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
     })
     .then(function (response) {
       return {
@@ -910,8 +918,7 @@ const pinFileToIPFS = async function(file) {
         message: error.message
       };
     });
-}
-
+};
 
 router.post('/getMaticBalanceFromWallet', async function (req, res) {
   try {
@@ -1123,7 +1130,11 @@ router.post('/getCollections', async function (req, res) {
     //     colList.push(e);
     //   }
     // })
-    const colData = await axios.post(process.env.ADMIN_URL + '/getCollections', {}, { 'Content-Type': `application/json` });
+    const colData = await axios.post(
+      process.env.ADMIN_URL + '/getCollections',
+      {},
+      { 'Content-Type': `application/json` }
+    );
     return res.send({
       status: true,
       data: colData.data.data
@@ -1268,39 +1279,49 @@ router.post('/fetchAllItemsOnSaleOfOwner', async function (req, res) {
 
 router.post('/fetchAllItemsOnSale', async function (req, res) {
   try {
-    let nftList = await MarketContract.methods.fetchMarketItems(req.body.nftaddress).call();
+    let nftList = await MarketContract.methods
+      .fetchMarketItems(req.body.nftaddress)
+      .call();
     let nftcontract;
     if (req.body.nfttype == 'ERC721') {
-      nftcontract = new web3.eth.Contract(VersusX721Info.abi, req.body.nftaddress);
+      nftcontract = new web3.eth.Contract(
+        VersusX721Info.abi,
+        req.body.nftaddress
+      );
     } else {
-      nftcontract = new web3.eth.Contract(VersusX1155Info.abi, req.body.nftaddress);
+      nftcontract = new web3.eth.Contract(
+        VersusX1155Info.abi,
+        req.body.nftaddress
+      );
     }
-    const items = await Promise.all(nftList.map(async nftItem => {
-      let nftInfo;
-      if (req.body.nfttype == 'ERC721') {
-        nftInfo = await nftcontract.methods.tokenURI(nftItem.tokenId).call();
-      } else {
-        nftInfo = await nftcontract.methods.uri(nftItem.tokenId).call();
-      }
-      let nftMetadata = await axiosGet(nftInfo);
-      return {
-        id: nftItem["tokenId"],
-        itemId: nftItem["itemId"],
-        address: nftItem["nftContract"],
-        thumbnail: nftMetadata.data["image_url"],
-        title: nftMetadata.data["name"],
-        description: nftMetadata.data["description"],
-        metadata: nftMetadata.data,
-        isOwned: nftItem["seller"] == req.body.userAddress,
-        price: nftItem["price"]
-      };
-    }))
+    const items = await Promise.all(
+      nftList.map(async (nftItem) => {
+        let nftInfo;
+        if (req.body.nfttype == 'ERC721') {
+          nftInfo = await nftcontract.methods.tokenURI(nftItem.tokenId).call();
+        } else {
+          nftInfo = await nftcontract.methods.uri(nftItem.tokenId).call();
+        }
+        let nftMetadata = await axiosGet(nftInfo);
+        return {
+          id: nftItem['tokenId'],
+          itemId: nftItem['itemId'],
+          address: nftItem['nftContract'],
+          thumbnail: nftMetadata.data['image_url'],
+          title: nftMetadata.data['name'],
+          description: nftMetadata.data['description'],
+          metadata: nftMetadata.data,
+          isOwned: nftItem['seller'] == req.body.userAddress,
+          price: nftItem['price']
+        };
+      })
+    );
     return res.json({
       status: true,
       msg: 'success',
       data: items
     });
-  } catch(e) {
+  } catch (e) {
     console.log(e);
     return res.json({
       status: false,
@@ -1418,7 +1439,6 @@ router.post('/getTokenPrice', async function (req, res) {
   try {
     var contract = req.body.address.toString().toLowerCase();
     var amount = req.body.amount;
-
     if (contract == SkillLambda.toLowerCase()) {
       let reserveData = await metakeepRead(
         'getReserves',
@@ -1427,7 +1447,7 @@ router.post('/getTokenPrice', async function (req, res) {
       );
       let result = Math.floor(
         (Number(amount) / Number(reserveData.data[0])) *
-        Number(reserveData.data[1])
+          Number(reserveData.data[1])
       );
       let maticVal = result / 10 ** 18;
 
@@ -1451,9 +1471,10 @@ router.post('/getTokenPrice', async function (req, res) {
         `https://api.coingecko.com/api/v3/simple/token_price/polygon-pos?contract_addresses=${contract}&vs_currencies=usd`
       );
       let usdPrice = usdPriceRes.data[contract]['usd'];
-      let realAmount = Number(amount) / 10 ** 18;
+      console.log(usdPrice);
+      let realAmount = (Number(amount) * Number(usdPrice)) / 10 ** 18;
 
-      res.send(String(realAmount * Number(usdPrice)));
+      res.send(realAmount.toFixed(20));
     }
     return;
   } catch (error) {
@@ -1464,17 +1485,15 @@ router.post('/getTokenPrice', async function (req, res) {
 
 router.post('/deleteCollection', async function (req, res) {
   try {
-    if (req.body.collectionId == "") {
+    if (req.body.collectionId == '') {
       return res.send({
         status: false,
-        msg: "Invalid request parameter"
+        msg: 'Invalid request parameter'
       });
     }
     let resultCollection = await metakeepInvoke(
       'deleteCollection',
-      [
-        req.body.collectionId
-      ],
+      [req.body.collectionId],
       MarketplaceLambda,
       'DeleteCollection'
     );
@@ -1499,23 +1518,33 @@ router.post('/deleteCollection', async function (req, res) {
 /**
  * upload file to ipfs
  */
-router.post('/uploadToIPFS', async function(req, res) {
-    if(!req.files.file) {
-      return res.send({
-        status: false,
-        msg: 'Please select file.'
-      });
-    }
-
-    let response = await pinFileToIPFS(fs.createReadStream(req.files.file.tempFilePath));
-    return res.send(response);
+router.post('/uploadToIPFS', async function (req, res) {
+  if (!req.files.file) {
+    return res.send({
+      status: false,
+      msg: 'Please select file.'
+    });
   }
-);
+
+  let response,
+    try_cnt = 0;
+
+  while (try_cnt < 5) {
+    response = await pinFileToIPFS(
+      fs.createReadStream(req.files.file.tempFilePath)
+    );
+    if (response.success) {
+      break;
+    }
+    try_cnt++;
+  }
+  return res.send(response);
+});
 
 /**
  * upload metadata to ipfs
  */
-router.post('/uploadMetadataToIPFS', async function(req, res) {
+router.post('/uploadMetadataToIPFS', async function (req, res) {
   try {
     let metadata = req.body.metadata;
     let name = req.body.name;
@@ -1524,7 +1553,7 @@ router.post('/uploadMetadataToIPFS', async function(req, res) {
     let image_url = req.body.image_url;
     let is_default = req.body.is_default;
 
-    if(!metadata) {
+    if (!metadata) {
       return res.send({
         status: false,
         msg: 'Please input metadata.'
@@ -1537,7 +1566,7 @@ router.post('/uploadMetadataToIPFS', async function(req, res) {
       image_url: image_url,
       nft_type: nft_type,
       is_default: is_default,
-      metadata: JSON.parse(metadata),
+      metadata: JSON.parse(metadata)
     };
 
     const pinataResponse = await pinJSONToIPFS(data);
@@ -1552,119 +1581,145 @@ router.post('/uploadMetadataToIPFS', async function(req, res) {
         url: pinataResponse.pinataUrl
       });
     }
-  } catch(e) {
+  } catch (e) {
     console.log(e);
     res.send({
       status: false,
       msg: 'something went wrong.'
     });
   }
-  
 });
 
-
-const _createAvatarNFT = async function(nftType, collectionAddress, userAddress, quantity, uri) {
+const _createAvatarNFT = async function (
+  nftType,
+  collectionAddress,
+  userAddress,
+  quantity,
+  uri
+) {
+  let transactionSuccess = false;
   try {
-
-      console.log(`_createAvatarNFT ${collectionAddress} ${userAddress} ${quantity} ${uri}`);
-      let nftContract;
-      if (nftType == 'ERC721') {
-        nftContract = new web3.eth.Contract(VersusX721Info.abi, collectionAddress);
-      } else {
-        nftContract = new web3.eth.Contract(VersusX1155Info.abi, collectionAddress);
-      }
-
-      let count = await web3.eth.getTransactionCount(process.env.MATIC_WALLET_ADDRESS, "latest"); //get latest nonce
-      let nonce = count;
-      let gasPrice = await web3.eth.getGasPrice();
-      let chainId = PolygonChainId;
-
-      console.log(gasPrice);
-
-      let tx;
-      
-      if (nftType == "ERC721") {
-        tx = userAddress == "" ?
-        nftContract.methods.createToken(uri) :
-        nftContract.methods.createTokenToUser(userAddress, uri);
-      } else {
-        tx = userAddress == "" ?
-        nftContract.methods.createToken(uri, quantity) :
-        nftContract.methods.createTokenToUser(userAddress, uri, quantity);
-      }
-
-      let gas = await tx.estimateGas({ from: process.env.MATIC_WALLET_ADDRESS });
-      let data = tx.encodeABI();
-      let signedTx = await web3.eth.accounts.signTransaction(
-        {
-          to: collectionAddress,
-          data,
-          gas: gas * 2,
-          gasPrice,
-          maxPriorityFeePerGas: gasPrice * 2,
-          nonce,
-          chainId
-        },
-        process.env.MATIC_WALLET_PRIVATEKEY
+    console.log(
+      `_createAvatarNFT ${collectionAddress} ${userAddress} ${quantity} ${uri}`
+    );
+    let nftContract;
+    if (nftType == 'ERC721') {
+      nftContract = new web3.eth.Contract(
+        VersusX721Info.abi,
+        collectionAddress
       );
-      let transactionReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+    } else {
+      nftContract = new web3.eth.Contract(
+        VersusX1155Info.abi,
+        collectionAddress
+      );
+    }
 
-      console.log(transactionReceipt);
+    let tx;
 
-      // Wait until nft is successfully until listed.
-      let retryCnt = 0;
-      while (retryCnt < 10) {
-        let nftList = await Moralis.default.EvmApi.nft.getWalletNFTs({
-          "chain": process.env.MORALIS_POLYGON_CHAIN_ID,
-          "format": "decimal",
-          "tokenAddresses": [
-            collectionAddress
-          ],
-          "mediaItems": true,
-          "address": userAddress
-        });
-        if (nftList.result.length > 0)
-          return true;
-        retryCnt ++;
-        await new Promise((resolve) => setTimeout(() => resolve(), 2000));
+    if (nftType == 'ERC721') {
+      tx =
+        userAddress == ''
+          ? nftContract.methods.createToken(uri)
+          : nftContract.methods.createTokenToUser(userAddress, uri);
+    } else {
+      tx =
+        userAddress == ''
+          ? nftContract.methods.createToken(uri, quantity)
+          : nftContract.methods.createTokenToUser(userAddress, uri, quantity);
+    }
+
+    let previousCount = 0;
+    try {
+      nftListData = await axios.get(
+        `https://polygon-mainnet.g.alchemy.com/nft/v3/${process.env.ALCHEMY_KEY}/getNFTsForOwner?owner=${userAddress}&contractAddresses[]=${collectionAddress}&withMetadata=true&pageSize=100&refreshCache=true`
+      );
+      previousCount = parseInt(nftListData.data.totalCount);
+      if (!previousCount) previousCount = 0;
+      console.log(previousCount);
+    } catch (e) {
+      console.log(e);
+    }
+
+    const transactionReceipt = await runTransaction(collectionAddress, tx);
+    if (transactionReceipt === false) {
+      return {
+        result: false,
+        error: 'Mint failed, try again later.'
+      };
+    }
+
+    transactionSuccess = true;
+
+    // Wait until nft is successfully until listed.
+    let retryCnt = 0;
+    while (retryCnt < 10) {
+      try {
+        let nftListData = await axios.get(
+          `https://polygon-mainnet.g.alchemy.com/nft/v3/${process.env.ALCHEMY_KEY}/getNFTsForOwner?owner=${userAddress}&contractAddresses[]=${collectionAddress}&withMetadata=true&pageSize=100&refreshCache=true`
+        );
+        if (parseInt(nftListData.data.totalCount) > previousCount)
+          return {
+            result: true
+          };
+      } catch (e) {
+        console.log(e);
       }
-      return false;
-  } catch(e) {
+      retryCnt++;
+      await new Promise((resolve) => setTimeout(() => resolve(), 2000));
+    }
+    return {
+      result: true,
+      error: 'not found after retry'
+    };
+  } catch (e) {
     console.log(e);
-    return false;
+    if (!transactionSuccess) {
+      latestNonce = await web3.eth.getTransactionCount(
+        process.env.MATIC_WALLET_ADDRESS,
+        'latest'
+      );
+    }
+    return {
+      result: false,
+      error: e + ''
+    };
   }
-}
-
+};
 
 /**
  * mint avatar NFT
  */
-router.post('/mintAvatarNFT', async function(req, res) {
+router.post('/mintAvatarNFT', async function (req, res) {
   let metadata = req.body.metadata;
   let name = req.body.name;
   let description = req.body.description;
   let userAddress = req.body.userAddress;
   let is_default = req.body.is_default;
 
-  const colData = await axios.post(process.env.ADMIN_URL + '/getCollectionInfo', {
-    name: 'AVATAR'
-  }, { 'Content-Type': `application/json` });
+  const colData = await axios.post(
+    process.env.ADMIN_URL + '/getCollectionInfo',
+    {
+      name: 'VSX_AVATARS'
+    },
+    { 'Content-Type': `application/json` }
+  );
 
   console.log(colData.data);
-  if(colData.data.status == false) {
+  if (colData.data.status == false) {
     return res.send({
       status: false,
       msg: 'The collection does not exist.'
     });
   }
-  
+
   let collectionInfo = colData.data.data;
 
   let collectionAddress = collectionInfo.collection_address;
   let nft_type = collectionInfo.collection_type;
   try {
-   // upload metadata
-    if(!metadata) {
+    // upload metadata
+    if (!metadata) {
       return res.send({
         status: false,
         msg: 'Please input metadata.'
@@ -1677,20 +1732,26 @@ router.post('/mintAvatarNFT', async function(req, res) {
       name: name,
       description: description,
       is_default: is_default,
-      ...metaObj,
+      ...metaObj
     };
 
     const pinataResponse = await pinJSONToIPFS(data);
     if (pinataResponse.success) {
-      let result = await _createAvatarNFT(nft_type, collectionAddress, userAddress, 1, pinataResponse.pinataUrl);
-      if(result) {
+      let result = await _createAvatarNFT(
+        nft_type,
+        collectionAddress,
+        userAddress,
+        1,
+        pinataResponse.pinataUrl
+      );
+      if (result.result) {
         res.send({
           status: true
         });
       } else {
         res.send({
           status: false,
-          msg: 'something went wrong1.'
+          msg: 'something went wrong: ' + result.result
         });
       }
     } else {
@@ -1698,9 +1759,9 @@ router.post('/mintAvatarNFT', async function(req, res) {
         status: false,
         msg: 'something went wrong2.'
       });
-    } 
+    }
   } catch (error) {
-    console.log(error)
+    console.log(error);
     res.send({
       status: false,
       msg: 'something went wrong3.'
@@ -1708,39 +1769,39 @@ router.post('/mintAvatarNFT', async function(req, res) {
   }
 });
 
-
-
 /**
- * mint avatar NFT
+ * mint holo avatar NFT
  */
-router.post('/mintClothNFT', async function(req, res) {
+router.post('/mintHoloNFT', async function (req, res) {
   let metadata = req.body.metadata;
   let name = req.body.name;
   let description = req.body.description;
   let userAddress = req.body.userAddress;
   let is_default = req.body.is_default;
-  let collection = req.body.collection;
 
+  const colData = await axios.post(
+    process.env.ADMIN_URL + '/getCollectionInfo',
+    {
+      name: 'VSX_HIGH_ROLLERS'
+    },
+    { 'Content-Type': `application/json` }
+  );
 
-  const colData = await axios.post(process.env.ADMIN_URL + '/getCollectionInfo', {
-    name: collection
-  }, { 'Content-Type': `application/json` });
   console.log(colData.data);
-
-  if(colData.data.status == false) {
+  if (colData.data.status == false) {
     return res.send({
       status: false,
       msg: 'The collection does not exist.'
     });
   }
-  
+
   let collectionInfo = colData.data.data;
+
   let collectionAddress = collectionInfo.collection_address;
   let nft_type = collectionInfo.collection_type;
-
   try {
-   // upload metadata
-    if(!metadata) {
+    // upload metadata
+    if (!metadata) {
       return res.send({
         status: false,
         msg: 'Please input metadata.'
@@ -1753,14 +1814,182 @@ router.post('/mintClothNFT', async function(req, res) {
       name: name,
       description: description,
       is_default: is_default,
-      ...metaObj,
+      ...metaObj
     };
 
     const pinataResponse = await pinJSONToIPFS(data);
+    if (pinataResponse.success) {
+      let result = await _createAvatarNFT(
+        nft_type,
+        collectionAddress,
+        userAddress,
+        1,
+        pinataResponse.pinataUrl
+      );
+      if (result.result) {
+        res.send({
+          status: true
+        });
+      } else {
+        res.send({
+          status: false,
+          msg: 'something went wrong: ' + result.error
+        });
+      }
+    } else {
+      res.send({
+        status: false,
+        msg: 'something went wrong2.'
+      });
+    }
+  } catch (error) {
+    console.log(error);
+    res.send({
+      status: false,
+      msg: 'something went wrong3.'
+    });
+  }
+});
+
+/**
+ * mint avatar NFT
+ */
+router.post('/mintClothNFT', async function (req, res) {
+  let metadata = req.body.metadata;
+  let name = req.body.name;
+  let description = req.body.description;
+  let userAddress = req.body.userAddress;
+  let is_default = req.body.is_default;
+
+  const colData = await axios.post(
+    process.env.ADMIN_URL + '/getCollectionInfo',
+    {
+      name: 'VSX_CLOTHING'
+    },
+    { 'Content-Type': `application/json` }
+  );
+  console.log(colData.data);
+
+  if (colData.data.status == false) {
+    return res.send({
+      status: false,
+      msg: 'The collection does not exist.'
+    });
+  }
+
+  let collectionInfo = colData.data.data;
+  let collectionAddress = collectionInfo.collection_address;
+  let clothingContract = new web3.eth.Contract(
+    VersusX1155Info.abi,
+    collectionAddress
+  );
+  let nft_type = collectionInfo.collection_type;
+
+  try {
+    // upload metadata
+    if (!metadata) {
+      return res.send({
+        status: false,
+        msg: 'Please input metadata.'
+      });
+    }
+
+    let metaObj = JSON.parse(metadata);
+
+    let rows = await knex('clothing')
+      .where('name', metaObj.name)
+      .where('contract', collectionAddress)
+      .select('*');
+    let pinataResponse;
+    if (rows.length) {
+      let prevMetaObj = JSON.parse(rows[0].metadata);
+      if (
+        Object.keys(prevMetaObj).length != Object.keys(metadata).keys(metadata)
+      ) {
+        let data = {
+          name: name,
+          description: description,
+          is_default: is_default,
+          ...metaObj
+        };
+
+        pinataResponse = await pinJSONToIPFS(data);
+        const new_url = pinataResponse.pinataUrl;
+
+        const tokenId = await getClothTokenIdFromUri(
+          collectionAddress,
+          rows[0].token_uri ? rows[0].token_uri : rows[0].tokenUri
+        );
+
+        let update_token_uri_tx = await clothingContract.methods.updateTokenUri(
+          tokenId,
+          new_url
+        );
+        await runTransaction(collectionAddress, update_token_uri_tx);
+        await knex('clothing').where('id', rows[0].id).update({
+          token_uri: new_url,
+          metadata
+        });
+      } else {
+        pinataResponse = {
+          success: true,
+          pinataUrl: rows[0].token_uri ? rows[0].token_uri : rows[0].tokenUri
+        };
+      }
+      const uidRows = await knex('clothing')
+        .where('uid', metaObj.uid)
+        .select('*');
+      if (!uidRows.length) {
+        await knex('clothing').insert([
+          {
+            id: 0,
+            type: metaObj.clothing_type,
+            uid: metaObj.uid,
+            name: metaObj.name,
+            metadata,
+            token_uri: pinataResponse.pinataUrl,
+            contract: collectionAddress,
+            count: 1,
+            created_at: Date.now(),
+            owner: userAddress
+          }
+        ]);
+      }
+    } else {
+      let data = {
+        name: name,
+        description: description,
+        is_default: is_default,
+        ...metaObj
+      };
+
+      pinataResponse = await pinJSONToIPFS(data);
+      await knex('clothing').insert([
+        {
+          id: 0,
+          type: metaObj.clothing_type,
+          uid: metaObj.uid,
+          name: metaObj.name,
+          metadata,
+          token_uri: pinataResponse.pinataUrl,
+          contract: collectionAddress,
+          count: 1,
+          created_at: Date.now(),
+          owner: userAddress
+        }
+      ]);
+    }
+
     console.log(pinataResponse);
     if (pinataResponse.success) {
-      let result = await _createAvatarNFT(nft_type, collectionAddress, userAddress, 1, pinataResponse.pinataUrl);
-      if(result) {
+      let result = await _createAvatarNFT(
+        nft_type,
+        collectionAddress,
+        userAddress,
+        1,
+        pinataResponse.pinataUrl
+      );
+      if (result.result) {
         res.send({
           status: true,
           name: name
@@ -1768,7 +1997,7 @@ router.post('/mintClothNFT', async function(req, res) {
       } else {
         res.send({
           status: false,
-          msg: 'something went wrong.1'
+          msg: 'something went wrong: ' + result.error
         });
       }
     } else {
@@ -1776,20 +2005,20 @@ router.post('/mintClothNFT', async function(req, res) {
         status: false,
         msg: 'something went wrong.2'
       });
-    } 
-  } catch {
+    }
+  } catch (e) {
+    console.log(e);
     res.send({
       status: false,
-      msg: 'something went wrong.3'
+      msg: 'something went wrong.' + e
     });
   }
 });
 
-
 /**
  * update NFT metadata
  */
-router.post('/updateNFTMetadata', async function(req, res) {
+router.post('/updateNFTMetadata', async function (req, res) {
   try {
     let metadata = req.body.metadata;
     let nftType = req.body.nft_type;
@@ -1798,20 +2027,20 @@ router.post('/updateNFTMetadata', async function(req, res) {
     let collectionAddress = req.body.collectionAddress;
     let tokenId = req.body.token_id;
 
-    if(!metadata) {
+    if (!metadata) {
       return res.send({
         status: false,
         msg: 'Please input metadata.'
       });
     }
-    
+
     let metaObj = JSON.parse(metadata);
 
     let data = {
       is_default: is_default,
-      ...metaObj,
+      ...metaObj
     };
-    
+
     const pinataResponse = await pinJSONToIPFS(data);
     if (!pinataResponse.success) {
       res.send({
@@ -1820,51 +2049,44 @@ router.post('/updateNFTMetadata', async function(req, res) {
       });
     } else {
       const url = pinataResponse.pinataUrl;
-      let nftContract = new web3.eth.Contract(VersusX721Info.abi, collectionAddress);
-      let count = await web3.eth.getTransactionCount(process.env.MATIC_WALLET_ADDRESS, "latest"); //get latest nonce
-      let nonce = count;
-      let gasPrice = await web3.eth.getGasPrice();
-      let chainId = PolygonChainId;
-
+      let nftContract;
+      if (nftType === 'ERC721') {
+        nftContract = new web3.eth.Contract(
+          VersusX721Info.abi,
+          collectionAddress
+        );
+      } else {
+        nftContract = new web3.eth.Contract(
+          VersusX1155Info.abi,
+          collectionAddress
+        );
+      }
       let tx;
-      console.log(url, nftType, collectionAddress, userAddress);
       tx = nftContract.methods.updateTokenUri(userAddress, tokenId, url);
 
-      console.log(tx);
-
-      let gas = await tx.estimateGas({ from: process.env.MATIC_WALLET_ADDRESS });
-      let data = tx.encodeABI();
-      let signedTx = await web3.eth.accounts.signTransaction(
-        {
-          to: collectionAddress,
-          data,
-          gas: gas * 2,
-          gasPrice,
-          nonce,
-          chainId
-        },
-        process.env.MATIC_WALLET_PRIVATEKEY
-      );
-      let transactionReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+      let transactionReceipt = await runTransaction(collectionAddress, tx);
       res.send({
         status: true,
         url,
         transactionReceipt
       });
     }
-  } catch(e) {
+  } catch (e) {
     console.log(e);
     res.send({
       status: false,
       msg: e.toString()
     });
   }
-  
 });
 
 router.post('/redeemAvatarList', async function (req, res) {
   const userAddress = req.body.address;
-  const holoPassNFT = new web3.eth.Contract(holoPassNFTContract, HoloPassNFTAddress);
+  console.log(HoloPassNFTAddress);
+  const holoPassNFT = new web3.eth.Contract(
+    holoPassNFTContract,
+    HoloPassNFTAddress
+  );
   const tokens = await holoPassNFT.methods.tokensOfOwner(userAddress).call();
   res.json(tokens);
 });
@@ -1875,35 +2097,68 @@ router.post('/redeemAvatar', async function (req, res) {
   const avatarTokenId = req.body.tokenId;
 
   // check user have redeem
-  const holoPassNFT = new web3.eth.Contract(holoPassNFTContract, HoloPassNFTAddress);
+  const holoPassNFT = new web3.eth.Contract(
+    holoPassNFTContract,
+    HoloPassNFTAddress
+  );
   const tokens = await holoPassNFT.methods.tokensOfOwner(userAddress).call();
-  if (tokens.findIndex(tk => tk === redeemId) == -1) {
+  console.log(tokens);
+  if (tokens.findIndex((tk) => tk === redeemId.toString()) == -1) {
     res.json({
-      status: "false",
-      msg: "User does not have selected redeem nft"
+      status: 'false',
+      msg: 'User does not have selected redeem nft'
     });
     return;
   }
 
-
-  const colData = await axios.post(process.env.ADMIN_URL + '/getCollectionInfo', {
-    name: 'AVATAR'
-  }, { 'Content-Type': `application/json` });
+  const colData = await axios.post(
+    process.env.ADMIN_URL + '/getCollectionInfo',
+    {
+      name: 'VSX_HIGH_ROLLERS'
+    },
+    { 'Content-Type': `application/json` }
+  );
 
   console.log(colData.data);
-  if(colData.data.status == false) {
+  if (colData.data.status == false) {
     return res.send({
       status: false,
       msg: 'The avatar collection does not exist.'
     });
   }
-  
+
+  try {
+    let tx = await holoPassNFT.methods.safeTransferFrom(
+      userAddress,
+      process.env.MATIC_WALLET_ADDRESS,
+      redeemId
+    );
+    let transactionReceipt = await runTransaction(HoloPassNFTAddress, tx);
+    if (!transactionReceipt) {
+      res.json({
+        status: false,
+        msg: 'Error at burning redeem nft'
+      });
+      return;
+    }
+  } catch (e) {
+    console.log(e);
+    res.json({
+      status: false,
+      msg: 'Error at burning redeem nft'
+    });
+    return;
+  }
+
   let collectionInfo = colData.data.data;
 
   let collectionAddress = collectionInfo.collection_address;
   let nft_type = collectionInfo.collection_type;
-  
-  let contract, metadata = {}, nftInfo, ownerAddress;
+
+  let contract,
+    metadata = {},
+    nftInfo,
+    ownerAddress;
   if (nft_type === 'ERC721') {
     contract = new web3.eth.Contract(VersusX721Info.abi, collectionAddress);
     nftInfo = await contract.methods.tokenURI(avatarTokenId).call();
@@ -1915,143 +2170,560 @@ router.post('/redeemAvatar', async function (req, res) {
     ownerAddress = await contract.methods.ownerOf(avatarTokenId).call();
     metadata = await axiosGet(nftInfo);
   }
+  console.log('Address', collectionAddress);
   metadata = metadata.data;
 
-  let clothes = ["upper_clothing", "lower_clothing", "footwear", "accessory"];
-  let collection_names = ["APP_UPPER", "APP_LOWER", "APP_FOOTWEAR", "APP_ACCESSORY"];
-  for (let i = 0; i < clothes.length; i ++) {
+  let clothes = ['upper_clothing', 'lower_clothing', 'footwear', 'accessory'];
+  for (let i = 0; i < clothes.length; i++) {
     const cloth = clothes[i];
-    const collection_name = collection_names[i];
     const uid = metadata[cloth];
     if (!uid) {
       continue;
     }
     try {
-      const nft = await findClothBasedOnUIDAndMint(collection_name, ownerAddress, uid);
+      const nft = await findClothBasedOnUID(uid);
       if (!nft) continue;
-        await _createAvatarNFT(nft.nft_type, nft.collectionAddress, userAddress, 1, nft.tokenURI);
-    }
-    catch (e) {
-      console.log(e);
-    }
-  }
-
-  try {
-    const result = await _createAvatarNFT(nft_type, collectionAddress, userAddress, 1, nftInfo);
-    if (!result) {
-      res.json({
-        status: false,
-        msg: "Error at avatar minting"
-      });
-      return;
-    }
-    try {
-      let tx = await holoPassNFT.methods.burnNFT(redeemId);
-      let gas = await tx.estimateGas({ from: process.env.MATIC_WALLET_ADDRESS });
-      let data = tx.encodeABI();
-      let count = await web3.eth.getTransactionCount(process.env.MATIC_WALLET_ADDRESS, "latest"); //get latest nonce
-      let gasPrice = await web3.eth.getGasPrice();
-      let chainId = PolygonChainId;
-      let signedTx = await web3.eth.accounts.signTransaction(
-        {
-          to: collectionAddress,
-          data,
-          gas: gas * 2,
-          gasPrice,
-          nonce: count,
-          chainId
-        },
-        process.env.MATIC_WALLET_PRIVATEKEY
+      // await _createAvatarNFT(
+      //   'ERC1155',
+      //   nft.contract,
+      //   userAddress,
+      //   1,
+      //   nft.tokenURI
+      // );
+      console.log(nft);
+      const token_id = await getClothTokenIdFromUri(nft.contract, nft.tokenURI);
+      console.log('TokenId', token_id);
+      let clothingContract = new web3.eth.Contract(
+        VersusX1155Info.abi,
+        nft.contract
       );
-      let transactionReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
-      res.json({
-        status: true,
-        msg: "Successfully airdroped avatar"
-      });
-    }
-    catch (e) {
+      let clothing_transfer_tx =
+        await clothingContract.methods.safeTransferFrom(
+          process.env.MATIC_WALLET_ADDRESS,
+          userAddress,
+          token_id,
+          1,
+          []
+        );
+      await runTransaction(nft.contract, clothing_transfer_tx);
+    } catch (e) {
       console.log(e);
-      res.json({
-        status: false,
-        msg: "Error at burning redeem nft"
-      });
-      return;
     }
-
   }
-  catch (e) {
+  try {
+    let avatar_transfer_tx = await contract.methods.safeTransferFrom(
+      process.env.MATIC_WALLET_ADDRESS,
+      userAddress,
+      avatarTokenId
+    );
+    await runTransaction(collectionAddress, avatar_transfer_tx);
+    res.json({
+      status: true,
+      msg: 'Successfully airdroped avatar'
+    });
+  } catch (e) {
     console.log(e);
+    let tx = await holoPassNFT.methods.safeTransferFrom(
+      process.env.MATIC_WALLET_ADDRESS,
+      userAddress,
+      redeemId
+    );
+    let transactionReceipt = await runTransaction(HoloPassNFTAddress, tx);
     res.json({
       status: false,
-      msg: "Error at minting avatar and burning"
+      msg: 'Error at minting avatar and burning'
     });
     return;
   }
 });
 
-async function findClothBasedOnUIDAndMint(type, address, uid) {
-  const colData = await axios.post(process.env.ADMIN_URL + '/getCollectionInfo', {
-    name: type
-  }, { 'Content-Type': `application/json` });
-
-  if(colData.data.status == false) {
-    return null;
-  }
-  
-  let collectionInfo = colData.data.data;
-  let collectionAddress = collectionInfo.collection_address;
-  let nft_type = collectionInfo.collection_type;
-
-  let nftList = await Moralis.default.EvmApi.nft.getWalletNFTs({
-        "chain": process.env.MORALIS_POLYGON_CHAIN_ID,
-        "format": "decimal",
-        "tokenAddresses": [
-          collectionAddress
-        ],
-        "mediaItems": true,
-        "address": address
-      });
-
-  let contract;
-  if (nft_type === 'ERC721') {
-    contract = new web3.eth.Contract(VersusX721Info.abi, collectionAddress);
-  } else {
-    contract = new web3.eth.Contract(VersusX1155Info.abi, collectionAddress);
-  }
-
-  const items = await Promise.all(nftList.result.map(async nftItem => {
-    let metadata = {}, nftInfo;
-    if (nft_type === 'ERC721') {
-      nftInfo = await contract.methods.tokenURI(nftItem.tokenId).call();
-      metadata = await axiosGet(nftInfo);
-    } else {
-      nftInfo = await contract.methods.uri(nftItem.tokenId).call();
-      metadata = await axiosGet(nftInfo);
+async function findClothBasedOnUID(uid) {
+  let rows = await knex('clothing').where('uid', uid).select('*');
+  if (rows.length) {
+    console.log(rows[0].token_uri);
+    try {
+      return {
+        contract: rows[0].contract,
+        tokenURI: rows[0].token_uri,
+        metadata: JSON.parse(rows[0].metadata)
+      };
+    } catch (e) {
+      return {
+        contract: rows[0].contract,
+        tokenURI: rows[0].token_uri,
+        metadata: null
+      };
     }
-    metadata = metadata.data;
-    return {
-      id: nftItem["tokenId"],
-      balance: nftItem["amount"],
-      address: nftItem["token_address"],
-      thumbnail: metadata?metadata["image_url"]:"",
-      title: nftItem["name"],
-      description: metadata?metadata["description"]:"",
-      metadata: metadata,
-      tokenURI: nftInfo,
-      isOwned: true
-    };
-  }))
-  
-  if (items.length == 0) {
-    return null;
   }
-  const item = items.find(item => item.metadata.uid == uid);
-  if (!item) return null;
-  console.log(item);
-  if (!item.tokenURI) return null;
-  return { nft_type, collectionAddress, tokenURI: item.tokenURI};
+  return null;
+}
+
+async function getClothTokenIdFromUri(contract, uri) {
+  let clothContract = new web3.eth.Contract(VersusX1155Info.abi, contract);
+  return await clothContract.methods.getTokenIdForURI(uri).call();
 }
 // setMarketData();
 // setNFTData();
+
+async function getCollectionInfo(name) {
+  const colData = await axios.post(
+    process.env.ADMIN_URL + '/getCollectionInfo',
+    {
+      name
+    },
+    { 'Content-Type': `application/json` }
+  );
+
+  if (colData.data.status == false) {
+    return null;
+  }
+
+  let collectionInfo = colData.data.data;
+  let collectionAddress = collectionInfo.collection_address;
+  let nft_type = collectionInfo.collection_type;
+  return {
+    collectionInfo,
+    collectionAddress,
+    nft_type
+  };
+}
+
+const runTransaction = async (contractAddress, tx) => {
+  let tryCnt = 0;
+  while (tryCnt < 5) {
+    try {
+      let gas = await tx.estimateGas({
+        from: process.env.MATIC_WALLET_ADDRESS
+      });
+      let data = tx.encodeABI();
+      let nonce = await web3.eth.getTransactionCount(
+        process.env.MATIC_WALLET_ADDRESS,
+        'latest'
+      ); //get latest nonce
+      if (nonce <= latestNonce) {
+        nonce = latestNonce + 1;
+      }
+      latestNonce = nonce;
+      let gasPrice = await web3.eth.getGasPrice();
+      let chainId = PolygonChainId;
+
+      let signedTx = await web3.eth.accounts.signTransaction(
+        {
+          to: contractAddress,
+          data,
+          gas: gas * 2,
+          gasPrice,
+          nonce,
+          chainId
+        },
+        process.env.MATIC_WALLET_PRIVATEKEY
+      );
+      let transactionReceipt = await web3.eth.sendSignedTransaction(
+        signedTx.rawTransaction
+      );
+      return transactionReceipt;
+    } catch (e) {
+      console.log(e);
+      console.log(JSON.stringify(e));
+    }
+    tryCnt++;
+  }
+  return false;
+};
+
+router.post('/setTokenSellable', async function (req, res) {
+  const token_id = req.body.tokenId;
+  const sellable = parseInt(req.body.sellable);
+  const clothing_collection = await getCollectionInfo('VSX_CLOTHING');
+  console.log('setTokenSellable');
+  if (!clothing_collection) {
+    return res.send({
+      status: false,
+      msg: 'The clothing collection does not exist.'
+    });
+  }
+
+  let clothingContract = new web3.eth.Contract(
+    VersusX1155Info.abi,
+    clothing_collection.collectionAddress
+  );
+
+  try {
+    let tx = await clothingContract.methods.setTokenSellable(
+      token_id,
+      sellable == 1
+    );
+
+    await runTransaction(clothing_collection.collectionAddress, tx);
+
+    // Update metadata
+    // 1. Get uri of token id from contract
+    const uri = await clothingContract.methods.uri(token_id).call();
+
+    // 2. fetch and decode metadata, update sellable property
+    let nftMetadata = (await axiosGet(uri)).data;
+    console.log(nftMetadata);
+    nftMetadata.sellable = sellable;
+
+    // 3. upload updated metadata to pindata
+    const pinataResponse = await pinJSONToIPFS(nftMetadata);
+    if (!pinataResponse.success) {
+      return res.send({
+        status: false,
+        msg: 'Pinata failed.'
+      });
+    }
+
+    const new_url = pinataResponse.pinataUrl;
+    try {
+      const uidRows = await knex('clothing')
+        .where('uid', nftMetadata.uid)
+        .select('id');
+      if (uidRows.length) {
+        await knex('clothing').where('uid', nftMetadata.uid).update({
+          token_uri: new_url,
+          metadata: nftMetadata
+        });
+      }
+    } catch (e) {
+      console.log(e);
+    }
+
+    let update_token_uri_tx = await clothingContract.methods.updateTokenUri(
+      token_id,
+      new_url
+    );
+    await runTransaction(
+      clothing_collection.collectionAddress,
+      update_token_uri_tx
+    );
+
+    return res.json({
+      status: true,
+      msg: 'Successfully set'
+    });
+  } catch (e) {
+    console.log(e);
+    return res.json({
+      status: false,
+      msg: 'Error at setting at contract'
+    });
+  }
+});
+
+router.post('/getTokenSellable', async function (req, res) {
+  const token_id = req.body.tokenId;
+  const clothing_collection = await getCollectionInfo('VSX_CLOTHING');
+  if (!clothing_collection) {
+    return res.send({
+      status: false,
+      msg: 'The clothing collection does not exist.'
+    });
+  }
+
+  let clothingContract = new web3.eth.Contract(
+    VersusX1155Info.abi,
+    clothing_collection.collectionAddress
+  );
+
+  try {
+    const value = await clothingContract.methods
+      .getTokenSellable(token_id)
+      .call();
+    return res.json({
+      status: true,
+      data: value
+    });
+  } catch (e) {
+    return res.json({
+      status: false,
+      msg: 'Error at getting at contract'
+    });
+  }
+});
+
+router.post('/setAvatarSellable', async function (req, res) {
+  const token_id = req.body.tokenId;
+  const sellable = parseInt(req.body.sellable);
+  const avatar_collection = await getCollectionInfo('VSX_AVATARS');
+  if (!avatar_collection) {
+    return res.send({
+      status: false,
+      msg: 'The avatar collection does not exist.'
+    });
+  }
+
+  let avatarContract = new web3.eth.Contract(
+    VersusX721Info.abi,
+    avatar_collection.collectionAddress
+  );
+
+  try {
+    let tx = await avatarContract.methods.setTokenSellable(
+      token_id,
+      sellable == 1
+    );
+
+    await runTransaction(avatar_collection.collectionAddress, tx);
+
+    // Update metadata
+    // 1. Get uri of token id from contract
+    const uri = await avatarContract.methods.uri(token_id).call();
+
+    // 2. fetch and decode metadata, update sellable property
+    let nftMetadata = (await axiosGet(nftInfo)).data;
+    console.log(nftMetadata);
+    nftMetadata.sellable = sellable;
+
+    // 3. upload updated metadata to pindata
+    const pinataResponse = await pinJSONToIPFS(data);
+    if (!pinataResponse.success) {
+      res.send({
+        status: false,
+        msg: 'Pinata failed.'
+      });
+    }
+
+    const new_url = pinataResponse.pinataUrl;
+    await knex('clothing').where('uid', metaObj.uid).update({
+      token_uri: new_url,
+      metadata: nftMetadata
+    });
+
+    let update_token_uri_tx = await avatarContract.methods.updateTokenUri(
+      token_id,
+      new_url
+    );
+    await runTransaction(update_token_uri_tx);
+    return res.json({
+      status: true,
+      msg: 'Successfully set'
+    });
+  } catch (e) {
+    console.log(e);
+    return res.json({
+      status: false,
+      msg: 'Error at setting at contract'
+    });
+  }
+});
+
+router.post('/getAvatarSellable', async function (req, res) {
+  const token_id = req.body.tokenId;
+  const avatar_collection = await getCollectionInfo('VSX_AVATARS');
+  if (!avatar_collection) {
+    return res.send({
+      status: false,
+      msg: 'The avatar collection does not exist.'
+    });
+  }
+
+  let avatarContract = new web3.eth.Contract(
+    VersusX721Info.abi,
+    avatar_collection.collectionAddress
+  );
+
+  try {
+    const value = await avatarContract.methods
+      .getTokenSellable(token_id)
+      .call();
+    return res.json({
+      status: true,
+      data: value
+    });
+  } catch (e) {
+    return res.json({
+      status: false,
+      msg: 'Error at getting at contract'
+    });
+  }
+});
+
+router.post('/bundleAvatar', async function (req, res) {
+  const userAddress = req.body.address;
+  const token_id = req.body.tokenId;
+
+  const avatar_collection = await getCollectionInfo('VSX_AVATARS');
+  if (!avatar_collection) {
+    return res.send({
+      status: false,
+      msg: 'The avatar collection does not exist.'
+    });
+  }
+
+  const avatar_bundle_collection = await getCollectionInfo('VSX_AVATAR_BUNDLE');
+  if (!avatar_bundle_collection) {
+    return res.send({
+      status: false,
+      msg: 'The avatar bundle collection does not exist.'
+    });
+  }
+
+  // check if user owns avatar
+  let avatarContract = new web3.eth.Contract(
+    VersusX721Info.abi,
+    avatar_collection.collectionAddress
+  );
+
+  const ownerAddress = await avatarContract.methods.ownerOf(token_id).call();
+  if (userAddress != ownerAddress) {
+    return res.send({
+      status: false,
+      msg: 'User is not the owner of avatar'
+    });
+  }
+
+  // prepare metadata for avatar bundle
+
+  const nftInfo = await avatarContract.methods.tokenURI(token_id).call();
+  let metadata = await axiosGet(nftInfo);
+  metadata = metadata.data;
+
+  let avatarBundleMetadata = {
+    name: 'Avatar Bundle - ' + AvatarName,
+    image_url: metadata.image_url,
+    AvatarName: metadata.name,
+    AvatarPFP: metadata.image_url,
+    AvatarUID: metadata.uid,
+    AvatarMetadata: nftInfo
+  };
+
+  let clothes = ['upper_clothing', 'lower_clothing', 'footwear', 'accessory'];
+  let itemNames = ['Upper', 'Lower', 'Footwear', 'Accessory'];
+  for (let i = 0; i < clothes.length; i++) {
+    const cloth = clothes[i];
+    avatarBundleMetadata[itemNames[i] + 'Name'] = 'empty';
+    avatarBundleMetadata[itemNames[i] + 'PFP'] = 'empty';
+    avatarBundleMetadata[itemNames[i] + 'UID'] = 'empty';
+    const uid = metadata[cloth];
+    if (!uid) {
+      continue;
+    }
+    try {
+      const nft = await findClothBasedOnUID(uid);
+      if (!nft) continue;
+      avatarBundleMetadata[itemNames[i] + 'Name'] = nft.metadata.name;
+      avatarBundleMetadata[itemNames[i] + 'PFP'] = nft.metadata.image_url;
+      avatarBundleMetadata[itemNames[i] + 'UID'] = nft.metadata.uid;
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
+  const pinataResponse = await pinJSONToIPFS(avatarBundleMetadata);
+  if (!pinataResponse.success) {
+    return res.json({
+      status: false,
+      msg: 'Uploading metadata to Pindata failed'
+    });
+  }
+  try {
+    let created = await _createAvatarNFT(
+      avatar_bundle_collection.nft_type,
+      avatar_bundle_collection.collectionAddress,
+      userAddress,
+      1,
+      pinataResponse.pinataUrl
+    );
+    if (created.result) {
+      return res.json({
+        status: true,
+        msg: 'Successfully bundled'
+      });
+    }
+    return res.json({
+      status: false,
+      msg:
+        'Error happened during creating avatar at line 2348: ' + created.error
+    });
+  } catch (e) {
+    return res.json({
+      status: false,
+      msg: 'Error happened during creating avatar at line 2351'
+    });
+  }
+});
+
+router.post('/unlockAvatar', async function (req, res) {
+  const userAddress = req.body.address;
+  const token_id = req.body.tokenId;
+
+  const avatar_collection = await getCollectionInfo('VSX_AVATARS');
+  if (!avatar_collection) {
+    return res.send({
+      status: false,
+      msg: 'The avatar collection does not exist.'
+    });
+  }
+
+  const avatar_bundle_collection = await getCollectionInfo('VSX_AVATAR_BUNDLE');
+  if (!avatar_bundle_collection) {
+    return res.send({
+      status: false,
+      msg: 'The avatar bundle collection does not exist.'
+    });
+  }
+
+  // check if user owns avatar
+  let avatarBundleContract = new web3.eth.Contract(
+    VersusX721Info.abi,
+    avatar_collection.collectionAddress
+  );
+
+  const ownerAddress = await avatarBundleContract.methods
+    .ownerOf(token_id)
+    .call();
+  if (userAddress != ownerAddress) {
+    return res.send({
+      status: false,
+      msg: 'User is not the owner of avatar bundle'
+    });
+  }
+
+  // extract metadata from avatar bundle
+  const nftInfo = await avatarContract.methods.tokenURI(token_id).call();
+  let metadata = await axiosGet(nftInfo);
+  metadata = metadata.data;
+
+  let itemNames = ['Upper', 'Lower', 'Footwear', 'Accessory'];
+  for (let i = 0; i < itemNames.length; i++) {
+    const cloth = itemNames[i];
+    const uid = metadata[cloth + 'UID'];
+    if (!uid) {
+      continue;
+    }
+    try {
+      const nft = await findClothBasedOnUID(uid);
+      if (!nft) continue;
+      await _createAvatarNFT(
+        'ERC1155',
+        nft.contract,
+        userAddress,
+        1,
+        nft.tokenURI
+      );
+    } catch (e) {
+      console.log(e);
+    }
+  }
+  await _createAvatarNFT(
+    'ERC721',
+    avatar_collection.collectionAddress,
+    userAddress,
+    1,
+    metadata['AvatarMetadata']
+  );
+  if (!result) {
+    res.json({
+      status: false,
+      msg: 'Error at avatar minting'
+    });
+    return;
+  }
+  res.json({
+    status: true,
+    msg: 'Successfully unlocked avatar'
+  });
+});
 
 module.exports = router;

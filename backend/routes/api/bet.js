@@ -2,11 +2,11 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 const Web3 = require('web3');
-const { ethers, utils } = require('ethers');
+const { ethers, utils, BigNumber } = require('ethers');
 require('dotenv').config();
-const CONFIG = require('./../../config')
+const CONFIG = require('./../../config');
 // fierbase
-const moment = require("moment");
+const moment = require('moment');
 const { initializeApp } = require('firebase/app');
 const {
   collectionGroup,
@@ -53,7 +53,9 @@ const UNISWAPADDRESS = process.env.UNISWAPADDRESS;
 const infuraKey = process.env.REACT_INFURA_KEY;
 const TreasuryWallet = process.env.TREASURY_WALLET_ADDRESS;
 const MaticAddress = process.env.MATIC_ADDRESS;
-const FactoryAddress = "0x5757371414417b8c6caad45baef941abc7d3ab32";
+const GoneTokenAddress = process.env.GONE_ADDRESS;
+const VsxTokenAddress = process.env.VSX_TOKEN_ADDRESS;
+const FactoryAddress = '0x5757371414417b8c6caad45baef941abc7d3ab32';
 
 const sportContract = require('../../abi/Sport_m.json');
 const betContract = require('../../abi/Bet_m.json');
@@ -80,24 +82,29 @@ var GetPriceLambda = process.env.GETPRICELAMBDA;
 
 var PolygonChainId = process.env.POLYGONCHAINID;
 
-var ProxyMetaLambda = "0x29d9dc2174539e2cA077Fa70aC802158cc5D5F70"
-var MarketGetDataLambda = "0xCc1580c9716A6A08ffb0F5E8E93c7fafFe469d47";
+var ProxyMetaLambda = '0x29d9dc2174539e2cA077Fa70aC802158cc5D5F70';
+var MarketGetDataLambda = '0xCc1580c9716A6A08ffb0F5E8E93c7fafFe469d47';
 
 // let web3 = new Web3(new Web3.providers.HttpProvider('https://rpc-mumbai.maticvigil.com', options));
 let web3 = new Web3(infuraKey);
 const provider = new ethers.providers.JsonRpcProvider(infuraKey);
 const etherInterfaceNFT = new ethers.utils.Interface(nftContract.abi);
 
-
 var marketCueContract;
 const marketCueABI = require('../../abi/Marketplace.json');
-marketCueContract = new web3.eth.Contract(marketCueABI, process.env.MARKET_CONTRACT_ADDRESS);
+marketCueContract = new web3.eth.Contract(
+  marketCueABI,
+  process.env.MARKET_CONTRACT_ADDRESS
+);
 
-const MarketContractInfo = require('./../../abi/VersusXMarket.json')
-let MarketContract = new web3.eth.Contract(MarketContractInfo.abi, process.env.VERSUSX_MARKET_ADDRESS);
+const MarketContractInfo = require('./../../abi/VersusXMarket.json');
+let MarketContract = new web3.eth.Contract(
+  MarketContractInfo.abi,
+  process.env.VERSUSX_MARKET_ADDRESS
+);
 
-const VersusX721Info = require('./../../abi/VersusX721.json')
-const VersusX1155Info = require('./../../abi/VersusX1155.json')
+const VersusX721Info = require('./../../abi/VersusX721.json');
+const VersusX1155Info = require('./../../abi/VersusX1155.json');
 
 function encrypt(pri_key) {
   try {
@@ -492,7 +499,9 @@ router.post('/create/nft_bet', async function (req, res) {
     let resJson = await axios.post(
       'https://api.metakeep.xyz/v2/app/lambda/create',
       {
-        constructor: { args: [req.body.sport, req.body.bet, metakeepDev, 'NFTBetLambda'] },
+        constructor: {
+          args: [req.body.sport, req.body.bet, metakeepDev, 'NFTBetLambda']
+        },
         bytecode: nftBetContract.bytecode,
         abi: nftBetContract.abi
       },
@@ -592,8 +601,8 @@ router.post('/create/nft', async function (req, res) {
       {
         constructor: {
           args: [
-            "EskillzNFT",
-            "ESKNFT",
+            'EskillzNFT',
+            'ESKNFT',
             req.body.marketplace,
             metakeepDev,
             'NFTLambda'
@@ -628,7 +637,7 @@ router.post('/getMaticAuto', async function (req, res) {
     to,
     nonce,
     gas: 500000,
-    gasPrice: 80000000000,
+    gasPrice: await web3.eth.getGasPrice(),
     chainId: PolygonChainId,
     value: ethers.utils.parseUnits('0.5', 'ether')._hex
   };
@@ -642,13 +651,12 @@ router.post('/getMaticAuto', async function (req, res) {
 });
 
 router.post('/CreateEskillzAccount', async function (req, res) {
-
   try {
     let UserID = req.body.UserID;
     let UserName = req.body.userName;
     let BirthDay = req.body.birthDay;
     if (UserID == null || UserName == null || BirthDay == null) {
-      res.send('Parameters must not be null.');
+      res.status(500).send('Parameters must not be null.');
       return;
     } else {
       if (UserID.length == 28) {
@@ -690,7 +698,7 @@ router.post('/CreateEskillzAccount', async function (req, res) {
               to,
               nonce,
               gas: 500000,
-              gasPrice: 80000000000,
+              gasPrice: await web3.eth.getGasPrice(),
               chainId: PolygonChainId,
               value: ethers.utils.parseUnits('0.5', 'ether')._hex
             };
@@ -769,27 +777,26 @@ router.post('/CreateEskillzAccount', async function (req, res) {
             await updateDoc(doc(db, 'users', `${UserID}`, 'Profile', 'KYC'), {
               documentType: ''
             });
-            res.send(address);
+            res.status(200).send(address);
             return;
           } else {
-            res.send('Wallet Address already exist now.');
+            res.status(500).send('Wallet Address already exist now.');
             return;
           }
         } catch {
-          res.send('Network is busy now, retry please.');
+          res.status(500).send('Network is busy now, retry please.');
         }
       } else {
-        res.send('Type of UserID is not correct.');
+        res.status(500).send('Type of UserID is not correct.');
       }
     }
   } catch (error) {
-    res.send('Your Request is not correct.');
+    res.status(500).send('Your Request is not correct.');
     return;
   }
 });
 
 router.post('/UpdateEskillzAccount', async function (req, res) {
-
   try {
     let UserID = req.body.UserID;
 
@@ -851,7 +858,6 @@ router.post('/UpdateEskillzAccount', async function (req, res) {
 });
 
 router.post('/DeleteEskillzAccount', async function (req, res) {
-
   try {
     let UserID = req.body.UserID;
     if (UserID == null) {
@@ -910,7 +916,6 @@ router.post('/DeleteEskillzAccount', async function (req, res) {
 });
 
 router.post('/getEskillzAccount', async function (req, res) {
-
   try {
     let UserID = req.body.UserID;
 
@@ -957,8 +962,6 @@ router.post('/getEskillzAccount', async function (req, res) {
   }
 });
 
-
-
 router.post('/set/bet', async function (req, res) {
   try {
     let resJson = await metakeepInvoke(
@@ -1004,7 +1007,6 @@ router.post('/set/feereceiver', async function (req, res) {
   }
 });
 
-
 router.post('/EarnSport', async function (req, res) {
   try {
     let UserID = req.body.UserID;
@@ -1038,11 +1040,7 @@ router.post('/EarnSport', async function (req, res) {
           }
         }
 
-        let curSport = await metakeepRead(
-          'balanceOf',
-          [Player],
-          SkillLambda
-        );
+        let curSport = await metakeepRead('balanceOf', [Player], SkillLambda);
 
         curBalBuf = Number(curSport.data) / 10 ** 9;
         //add pendingToken
@@ -1128,11 +1126,7 @@ router.post('/EarnSport', async function (req, res) {
           }
 
           // update current balance
-          let curBal = await metakeepRead(
-            'balanceOf',
-            [Player],
-            SkillLambda
-          );
+          let curBal = await metakeepRead('balanceOf', [Player], SkillLambda);
           var docSnapSportBal = await getDoc(
             doc(db, 'users', `${UserID}`, 'Private', 'WalletBalances')
           );
@@ -1170,7 +1164,7 @@ router.post('/CreateSPGame', async function (req, res) {
   try {
     let UserID = req.body.UserID;
     let CreatePlayer = req.body.CreatePlayer;
-    let BetAmounts = Number(req.body.BetAmounts);
+    let BetAmounts = req.body.BetAmounts;
     let TokenAddress = req.body.TokenAddress;
 
     let isSport = TokenAddress == SkillLambda;
@@ -1233,7 +1227,11 @@ router.post('/CreateSPGame', async function (req, res) {
         // }
 
         if (isSport) {
-          let stakeAmount = await metakeepRead("balanceOf", [CreatePlayer], SkillLambda);
+          let stakeAmount = await metakeepRead(
+            'balanceOf',
+            [CreatePlayer],
+            SkillLambda
+          );
           if (!stakeAmount.status) {
             return res.json({
               result: stakeAmount.status,
@@ -1248,7 +1246,8 @@ router.post('/CreateSPGame', async function (req, res) {
           if (Number(stakeAmount) < BetAmounts) {
             return res.json({
               result: false,
-              message: "Sport balance of Create Player is smaller than BetAmounts.",
+              message:
+                'Sport balance of Create Player is smaller than BetAmounts.',
               GameID: 0,
               BetFee: 0,
               ExchangeAmount: ExchangeAmount / 10 ** 9
@@ -1277,7 +1276,7 @@ router.post('/CreateSPGame', async function (req, res) {
           if (skillAmount == 0) {
             return res.json({
               result: false,
-              message: "Converting Skill is failed.",
+              message: 'Converting Skill is failed.',
               GameID: 0,
               BetFee: 0,
               ExchangeAmount: ExchangeAmount / 10 ** 9
@@ -1299,11 +1298,16 @@ router.post('/CreateSPGame', async function (req, res) {
               ExchangeAmount: ExchangeAmount / 10 ** 9
             });
           }
-          let retVal = await sendTokenToTreasury(CreatePlayer, UserID, TokenAddress, BetAmounts);
+          let retVal = await sendTokenToTreasury(
+            CreatePlayer,
+            UserID,
+            TokenAddress,
+            BetAmounts
+          );
           if (!retVal) {
             return res.json({
               result: false,
-              message: "Insufficient funds for gas price.",
+              message: 'Insufficient funds for gas price.',
               GameID: 0,
               BetFee: 0,
               ExchangeAmount: ExchangeAmount / 10 ** 9
@@ -1334,7 +1338,7 @@ router.post('/CreateSPGame', async function (req, res) {
           );
         }
 
-        await axios.post(process.env.ADMIN_URL + "/create_spgame", {
+        await axios.post(process.env.ADMIN_URL + '/create_spgame', {
           UserID,
           CreatePlayer,
           GameID: gameid.data,
@@ -1454,7 +1458,13 @@ router.post('/SetSPGameResult', async function (req, res) {
     let UserID = req.body.UserID;
     let ReductionFee = req.body.ReductionFee;
     let GameID = Number(req.body.GameID);
-    if (GameID == null || UserID == null || ReductionFee == null) {
+    let TokenAddress = req.body.TokenAddress;
+    if (
+      GameID == null ||
+      UserID == null ||
+      ReductionFee == null ||
+      TokenAddress == null
+    ) {
       res.send('Parameters must not be null.');
       return;
     } else {
@@ -1464,6 +1474,7 @@ router.post('/SetSPGameResult', async function (req, res) {
         doc(db, 'eskillzGameResult', GameID.toString())
       );
       if (docSnap.exists()) {
+        console.log(docSnap.data());
         WinPlayer = docSnap.data().winAddress;
         Result = docSnap.data().result;
         if (WinPlayer == null || Result == null) {
@@ -1483,6 +1494,7 @@ router.post('/SetSPGameResult', async function (req, res) {
                 BetLambda
               );
               betAmounts_ID = betAmounts_ID.data;
+              console.log(betAmounts_ID);
 
               var dateTimeComp = new Date();
               var rowsComp = await knex('gameresult')
@@ -1516,7 +1528,7 @@ router.post('/SetSPGameResult', async function (req, res) {
                 Amounts: String(
                   (Number(betAmounts_ID[1]) *
                     (100 + Number(Result) - RakeFee)) /
-                  100
+                    100
                 )
               });
 
@@ -1535,8 +1547,8 @@ router.post('/SetSPGameResult', async function (req, res) {
                         Number(PSExist) +
                         (Number(betAmounts_ID[1]) *
                           (100 + Number(Result) - RakeFee)) /
-                        100 /
-                        10 ** 9
+                          100 /
+                          10 ** 9
                     }
                   );
                   pendBalBuf = Number(PSExist);
@@ -1575,9 +1587,9 @@ router.post('/SetSPGameResult', async function (req, res) {
                   .update({
                     balance: String(
                       Number(rows[0].balance) +
-                      (Number(betAmounts_ID[1]) *
-                        (100 + Number(Result) - RakeFee)) /
-                      100
+                        (Number(betAmounts_ID[1]) *
+                          (100 + Number(Result) - RakeFee)) /
+                          100
                     )
                   });
               } else {
@@ -1586,7 +1598,7 @@ router.post('/SetSPGameResult', async function (req, res) {
                   balance: String(
                     (Number(betAmounts_ID[1]) *
                       (100 + Number(Result) - RakeFee)) /
-                    100
+                      100
                   )
                 });
               }
@@ -1595,20 +1607,50 @@ router.post('/SetSPGameResult', async function (req, res) {
               if (Number(betAmounts_ID[3]) == 0) {
                 returnVal = await metakeepInvoke(
                   'SetSPGameResult',
-                  [WinPlayer, GameID.toString(), Result.toString(), ReductionFee.toString()],
+                  [
+                    WinPlayer,
+                    GameID.toString(),
+                    Result.toString(),
+                    ReductionFee.toString()
+                  ],
                   BetLambda,
                   'SetSPGameResult'
                 );
               } else {
                 returnVal = await metakeepInvoke(
                   'SetSPGameResultByToken',
-                  [WinPlayer, GameID.toString(), Result.toString(), ReductionFee.toString()],
+                  [
+                    WinPlayer,
+                    GameID.toString(),
+                    Result.toString(),
+                    ReductionFee.toString()
+                  ],
                   BetLambda,
                   'SetSPGameResultByToken'
                 );
+                console.log(
+                  (
+                    (BigInt(betAmounts_ID[1]) * (100n + BigInt(Result) - 5n)) /
+                    100n
+                  ).toString()
+                );
+                await sendTokenFromTreasury(
+                  WinPlayer,
+                  UserID,
+                  TokenAddress,
+                  (BigInt(betAmounts_ID[1]) * (100n + BigInt(Result) - 5n)) /
+                    100n
+                );
+                await sendTokenToAddress(
+                  WinPlayer,
+                  UserID,
+                  TokenAddress,
+                  (BigInt(betAmounts_ID[1]) * 5n) / 100n,
+                  TreasuryWallet
+                );
               }
               //await fSetSPGameResult(UserID, GameID, WinPlayer, parseInt(Number(Result)), ExchangeAmount, privateKeyVal, 0);
-              if (returnVal.status == true) {
+              if (true) {
                 await deleteDoc(
                   doc(db, 'eskillzGameResult', GameID.toString())
                 );
@@ -1618,7 +1660,7 @@ router.post('/SetSPGameResult', async function (req, res) {
                   WinPlayer,
                   (Number(betAmounts_ID[1]) *
                     (100 + Number(Result) - RakeFee)) /
-                  100
+                    100
                 );
                 //
                 var docSnapBUF = await getDoc(
@@ -1670,13 +1712,13 @@ router.post('/SetSPGameResult', async function (req, res) {
 
                 return res.send({
                   result: true,
-                  message: returnVal.data.transactionHash,
+                  message: returnVal.data.transactionHash ?? '',
                   ExchangeAmount: 0
                 });
               }
               return res.send({
                 result: false,
-                message: returnVal.data.msg,
+                message: returnVal.data,
                 ExchangeAmount: 0
               });
             } else {
@@ -1706,7 +1748,7 @@ router.post('/SetSPGameResult', async function (req, res) {
     }
   } catch (error) {
     console.error(error);
-    res.send('Your Request is not correct.');
+    res.send('Your Request is not correct. ' + error);
     return;
   }
 });
@@ -1719,7 +1761,7 @@ const fCreateMPGame = async (
   ExchangeAmount1,
   ExchangeAmount2,
   rakeFee,
-  TokenAddress,
+  TokenAddress
 ) => {
   try {
     let isSport = TokenAddress == SkillLambda;
@@ -1814,7 +1856,7 @@ const fCreateMPGame = async (
       if (skillAmount == 0) {
         return res.json({
           result: false,
-          message: "Converting Skill is failed.",
+          message: 'Converting Skill is failed.',
           GameID: 0,
           BetFee: 0,
           ExchangeAmount1: ExchangeAmount1 / 10 ** 9,
@@ -1830,11 +1872,16 @@ const fCreateMPGame = async (
       );
 
       if (cMpGame.status) {
-        let retVal = await sendTokenToTreasury(CreatePlayer, UserID_Creator, TokenAddress, BetAmounts);
+        let retVal = await sendTokenToTreasury(
+          CreatePlayer,
+          UserID_Creator,
+          TokenAddress,
+          BetAmounts
+        );
         if (!retVal) {
           return res.json({
             result: false,
-            message: "Sending Token is failed.",
+            message: 'Sending Token from creator is failed.',
             GameID: 0,
             BetFee: 0,
             ExchangeAmount1: ExchangeAmount1 / 10 ** 9,
@@ -1866,7 +1913,7 @@ const fCreateMPGame = async (
       ExchangeAmount2: ExchangeAmount2 / 10 ** 9
     };
   } catch (err) {
-      console.error(err)
+    console.error(err);
     return {
       result: false,
       message: 'Network is Busy.Transaction failed.',
@@ -1878,7 +1925,13 @@ const fCreateMPGame = async (
   }
 };
 
-const fJoinMPGame = async (JoinPlayer, UserID_Joiner, BetAmounts, returnVal, TokenAddress) => {
+const fJoinMPGame = async (
+  JoinPlayer,
+  UserID_Joiner,
+  BetAmounts,
+  returnVal,
+  TokenAddress
+) => {
   try {
     let isSport = TokenAddress == SkillLambda;
     let joinData;
@@ -1907,7 +1960,12 @@ const fJoinMPGame = async (JoinPlayer, UserID_Joiner, BetAmounts, returnVal, Tok
       );
 
       if (joinData.status) {
-        let retVal = await sendTokenToTreasury(JoinPlayer, UserID_Joiner, TokenAddress, BetAmounts);
+        let retVal = await sendTokenToTreasury(
+          JoinPlayer,
+          UserID_Joiner,
+          TokenAddress,
+          BetAmounts
+        );
         if (!retVal) {
           returnVal.GameID = 0;
           returnVal.result = false;
@@ -1943,8 +2001,9 @@ const fCreateMPGameForNFT = async (
   NftContracts
 ) => {
   try {
-
-    let docSnapNFTBettingFee = await getDoc(doc(db, 'eskillzGeneral', "NFTBetting"));
+    let docSnapNFTBettingFee = await getDoc(
+      doc(db, 'eskillzGeneral', 'NFTBetting')
+    );
     if (!docSnapNFTBettingFee.exists()) {
       return {
         result: false,
@@ -1955,7 +2014,10 @@ const fCreateMPGameForNFT = async (
         ExchangeAmount2: ExchangeAmount2 / 10 ** 9
       };
     }
-    let nftBetFee = (Number(docSnapNFTBettingFee.data()["fee"]) * 10 ** 9).toString();
+    let nftBetFee = (
+      Number(docSnapNFTBettingFee.data()['fee']) *
+      10 ** 9
+    ).toString();
 
     let stakeAmount1 = await metakeepRead(
       'balanceOf',
@@ -2030,11 +2092,18 @@ const fCreateMPGameForNFT = async (
       });
     }
     for (let i = 0; i < NftIds.length; i++) {
-      let nftOwner = await metakeepRead("ownerOf", [NftIds[i] + ""], NftContracts[i]);
+      let nftOwner = await metakeepRead(
+        'ownerOf',
+        [NftIds[i] + ''],
+        NftContracts[i]
+      );
       if (nftOwner.data != NFTBetLambda) {
-        const count = await provider.getTransactionCount(CreatePlayer, 'latest'); //get latest nonce
+        const count = await provider.getTransactionCount(
+          CreatePlayer,
+          'latest'
+        ); //get latest nonce
 
-        var gasPrice = 8000000000;
+        var gasPrice = await provider.getGasPrice();
         var chainId = PolygonChainId;
         var nonce = count;
         // approve
@@ -2044,11 +2113,11 @@ const fCreateMPGameForNFT = async (
           to: NftContracts[i],
           nonce,
           chainId,
-          gasPrice,
-          data: etherInterfaceNFT.encodeFunctionData(
-            'approve',
-            [NFTBetLambda, NftIds[i] + ""]
-          )
+          gasPrice: gasPrice * 2,
+          data: etherInterfaceNFT.encodeFunctionData('approve', [
+            NFTBetLambda,
+            NftIds[i] + ''
+          ])
         };
 
         //Estimate gas limit
@@ -2066,7 +2135,7 @@ const fCreateMPGameForNFT = async (
       }
     }
 
-    let docSnapPrize = await getDoc(doc(db, 'eskillzGeneral', "PrizeSettings"));
+    let docSnapPrize = await getDoc(doc(db, 'eskillzGeneral', 'PrizeSettings'));
     if (!docSnapPrize.exists()) {
       return {
         result: false,
@@ -2082,7 +2151,7 @@ const fCreateMPGameForNFT = async (
 
     cMpGame = await metakeepInvoke(
       'CreateMPGameForNFT',
-      [CreatePlayer, nftBetFee, docPrizeInfo["address"], NftIds, NftContracts],
+      [CreatePlayer, nftBetFee, docPrizeInfo['address'], NftIds, NftContracts],
       NFTBetLambda,
       'CreateMPGameForNFT'
     );
@@ -2120,9 +2189,16 @@ const fCreateMPGameForNFT = async (
   }
 };
 
-const fJoinMPGameForNFT = async (JoinPlayer, returnVal, NftIds, NftContracts) => {
+const fJoinMPGameForNFT = async (
+  JoinPlayer,
+  returnVal,
+  NftIds,
+  NftContracts
+) => {
   try {
-    let docSnapNFTBettingFee = await getDoc(doc(db, 'eskillzGeneral', "NFTBetting"));
+    let docSnapNFTBettingFee = await getDoc(
+      doc(db, 'eskillzGeneral', 'NFTBetting')
+    );
     if (!docSnapNFTBettingFee.exists()) {
       return {
         result: false,
@@ -2133,7 +2209,10 @@ const fJoinMPGameForNFT = async (JoinPlayer, returnVal, NftIds, NftContracts) =>
         ExchangeAmount2: ExchangeAmount2 / 10 ** 9
       };
     }
-    let nftBetFee = (Number(docSnapNFTBettingFee.data()["fee"]) * 10 ** 9).toString();
+    let nftBetFee = (
+      Number(docSnapNFTBettingFee.data()['fee']) *
+      10 ** 9
+    ).toString();
 
     let approveInfo = await metakeepInvoke(
       'approveFrom',
@@ -2152,7 +2231,7 @@ const fJoinMPGameForNFT = async (JoinPlayer, returnVal, NftIds, NftContracts) =>
     for (let i = 0; i < NftIds.length; i++) {
       const count = await provider.getTransactionCount(JoinPlayer, 'latest'); //get latest nonce
 
-      var gasPrice = 8000000000;
+      var gasPrice = await provider.getGasPrice();
       var chainId = PolygonChainId;
       var nonce = count;
       // approve
@@ -2162,11 +2241,11 @@ const fJoinMPGameForNFT = async (JoinPlayer, returnVal, NftIds, NftContracts) =>
         to: NftContracts[i],
         nonce,
         chainId,
-        gasPrice,
-        data: etherInterfaceNFT.encodeFunctionData(
-          'approve',
-          [NFTBetLambda, NftIds[i] + ""]
-        )
+        gasPrice: gasPrice * 2,
+        data: etherInterfaceNFT.encodeFunctionData('approve', [
+          NFTBetLambda,
+          NftIds[i] + ''
+        ])
       };
 
       //Estimate gas limit
@@ -2183,7 +2262,7 @@ const fJoinMPGameForNFT = async (JoinPlayer, returnVal, NftIds, NftContracts) =>
       console.log(transactionReceipt1.hash);
     }
 
-    let docSnapPrize = await getDoc(doc(db, 'eskillzGeneral', "PrizeSettings"));
+    let docSnapPrize = await getDoc(doc(db, 'eskillzGeneral', 'PrizeSettings'));
     if (!docSnapPrize.exists()) {
       return {
         result: false,
@@ -2200,7 +2279,14 @@ const fJoinMPGameForNFT = async (JoinPlayer, returnVal, NftIds, NftContracts) =>
     let joinData;
     joinData = await metakeepInvoke(
       'JoinMPGameForNFT',
-      [JoinPlayer, returnVal.GameID, nftBetFee, docPrizeInfo["address"], NftIds, NftContracts],
+      [
+        JoinPlayer,
+        returnVal.GameID,
+        nftBetFee,
+        docPrizeInfo['address'],
+        NftIds,
+        NftContracts
+      ],
       NFTBetLambda,
       'JoinMPGameForNFT'
     );
@@ -2227,7 +2313,7 @@ router.post('/CreateMPGame', async function (req, res) {
     let UserID_Joiner = req.body.UserID_Joiner;
     let CreatePlayer = req.body.CreatePlayer;
     let JoinPlayer = req.body.JoinPlayer;
-    let BetAmounts = Number(req.body.BetAmounts);
+    let BetAmounts = req.body.BetAmounts;
     let TokenAddress = req.body.TokenAddress;
 
     // let isSport = TokenAddress == SkillLambda;
@@ -2308,7 +2394,7 @@ router.post('/CreateMPGame', async function (req, res) {
                 CreatePlayer,
                 JoinPlayer,
                 UserID_Creator,
-                parseInt(BetAmounts),
+                BetAmounts,
                 ExchangeAmount1,
                 ExchangeAmount2,
                 rakeFee,
@@ -2319,7 +2405,7 @@ router.post('/CreateMPGame', async function (req, res) {
                 let returnVal1 = await fJoinMPGame(
                   JoinPlayer,
                   UserID_Joiner,
-                  parseInt(BetAmounts),
+                  BetAmounts,
                   returnVal,
                   TokenAddress
                 );
@@ -2406,7 +2492,7 @@ router.post('/CreateMPGame', async function (req, res) {
                   );
                 }
 
-                await axios.post(process.env.ADMIN_URL + "/create_mpgame", {
+                await axios.post(process.env.ADMIN_URL + '/create_mpgame', {
                   UserID_Creator,
                   CreatePlayer,
                   UserID_Joiner,
@@ -2477,13 +2563,13 @@ router.post('/CreateMPGameForNFT', async function (req, res) {
     let cAddrs = [];
     let jIds = [];
     let jAddrs = [];
-    CreatorNFTs.map(e => {
-      cIds.push(e["tokenID"]);
-      cAddrs.push(e["contract"]);
+    CreatorNFTs.map((e) => {
+      cIds.push(e['tokenID']);
+      cAddrs.push(e['contract']);
     });
-    JoinerNFTs.map(e => {
-      jIds.push(e["tokenID"]);
-      jAddrs.push(e["contract"]);
+    JoinerNFTs.map((e) => {
+      jIds.push(e['tokenID']);
+      jAddrs.push(e['contract']);
     });
 
     // let isSport = TokenAddress == SkillLambda;
@@ -2527,7 +2613,6 @@ router.post('/CreateMPGameForNFT', async function (req, res) {
               ExchangeAmount2: ExchangeAmount2 / 10 ** 9
             });
           } else {
-
             let rakeFee = await metakeepRead('eskillz_fee', [], BetLambda);
             if (!rakeFee.status) {
               return res.json({
@@ -2679,7 +2764,16 @@ router.post('/CreateMPGameForNFT', async function (req, res) {
   }
 });
 
-const fSetMPGameResult = async (GameID, WinPlayer, ExchangeAmount, BetType, ReductionFee) => {
+const fSetMPGameResult = async (
+  GameID,
+  WinPlayer,
+  ExchangeAmount,
+  BetType,
+  ReductionFee,
+  TokenAddress,
+  UserID,
+  amount
+) => {
   try {
     let mpresult;
     if (BetType == 0) {
@@ -2696,12 +2790,27 @@ const fSetMPGameResult = async (GameID, WinPlayer, ExchangeAmount, BetType, Redu
         BetLambda,
         'SetMPGameResultByToken'
       );
+
+      await sendTokenFromTreasury(
+        WinPlayer,
+        UserID,
+        TokenAddress,
+        (BigInt(amount) * 19n) / 10n
+      );
+
+      await sendTokenToAddress(
+        WinPlayer,
+        UserID,
+        TokenAddress,
+        BigInt(amount) / 10n,
+        TreasuryWallet
+      );
     }
 
     await deleteDoc(doc(db, 'eskillzGameResult', GameID.toString()));
     return {
       result: true,
-      message: mpresult.data.transactionHash,
+      message: mpresult.transactionHash,
       ExchangeAmount: ExchangeAmount / 10 ** 9
     };
   } catch (error) {
@@ -2718,12 +2827,18 @@ router.post('/SetMPGameResult', async function (req, res) {
   try {
     let UserID = req.body.UserID;
     let GameID = Number(req.body.GameID);
+    let TokenAddress = req.body.TokenAddress;
     var ExchangeAmount = 0;
     var RakeFee = 5;
     var pendBalBuf = 0;
     let ReductionFee = req.body.ReductionFee;
 
-    if (GameID == null || UserID == null || ReductionFee == null) {
+    if (
+      GameID == null ||
+      UserID == null ||
+      ReductionFee == null ||
+      TokenAddress == null
+    ) {
       res.json({
         result: false,
         message: 'Requirement Parameters must not be null.',
@@ -2754,6 +2869,7 @@ router.post('/SetMPGameResult', async function (req, res) {
               BetLambda
             );
             betAmounts_ID = betAmounts_ID.data;
+            console.log(betAmounts_ID);
 
             var dateTimeComp = new Date();
             var rowsComp = await knex('gameresult')
@@ -2803,8 +2919,8 @@ router.post('/SetMPGameResult', async function (req, res) {
                     PendingSkill:
                       Number(PSExist) +
                       (Number(betAmounts_ID[1]) * (200 - RakeFee)) /
-                      100 /
-                      10 ** 9
+                        100 /
+                        10 ** 9
                   }
                 );
                 pendBalBuf = Number(PSExist);
@@ -2838,7 +2954,7 @@ router.post('/SetMPGameResult', async function (req, res) {
                 .update({
                   balance: String(
                     Number(rows[0].balance) +
-                    (Number(betAmounts_ID[1]) * (200 - RakeFee)) / 100
+                      (Number(betAmounts_ID[1]) * (200 - RakeFee)) / 100
                   )
                 });
             } else {
@@ -2855,7 +2971,10 @@ router.post('/SetMPGameResult', async function (req, res) {
               WinPlayer,
               ExchangeAmount,
               Number(betAmounts_ID[3]),
-              ReductionFee.toString()
+              ReductionFee.toString(),
+              TokenAddress,
+              UserID,
+              betAmounts_ID[1]
             );
             if (returnVal.result == true) {
               await deleteGameResult(insertedID[0]);
@@ -2945,7 +3064,12 @@ router.post('/SetMPGameResult', async function (req, res) {
   }
 });
 
-const fSetMPGameResultForNFT = async (GameID, WinPlayer, ExchangeAmount, BetType) => {
+const fSetMPGameResultForNFT = async (
+  GameID,
+  WinPlayer,
+  ExchangeAmount,
+  BetType
+) => {
   try {
     let mpresult;
     mpresult = await metakeepInvoke(
@@ -3059,8 +3183,8 @@ router.post('/SetMPGameResultForNFT', async function (req, res) {
                     PendingSkill:
                       Number(PSExist) +
                       (Number(betAmounts_ID[1]) * (200 - RakeFee)) /
-                      100 /
-                      10 ** 9
+                        100 /
+                        10 ** 9
                   }
                 );
                 pendBalBuf = Number(PSExist);
@@ -3094,7 +3218,7 @@ router.post('/SetMPGameResultForNFT', async function (req, res) {
                 .update({
                   balance: String(
                     Number(rows[0].balance) +
-                    (Number(betAmounts_ID[1]) * (200 - RakeFee)) / 100
+                      (Number(betAmounts_ID[1]) * (200 - RakeFee)) / 100
                   )
                 });
             } else {
@@ -3312,7 +3436,7 @@ router.post('/SendMatic', async function (req, res) {
           // var tx = esgContract.methods.transfer(ToAddress, parseInt(Amounts).toString());
           var gas = 21000;
           var nonce = count;
-          var gasPrice = 80000000000;
+          var gasPrice = await web3.eth.getGasPrice();
           var chainId = PolygonChainId;
           var keyBuf = await getKey(UserID);
           if (keyBuf == 0) {
@@ -3327,7 +3451,7 @@ router.post('/SendMatic', async function (req, res) {
               to: ToAddress,
               value: web3.utils.toWei(String(Amounts), 'ether'),
               gas: gas * 2,
-              gasPrice,
+              gasPrice: gasPrice * 2,
               nonce,
               chainId
             },
@@ -3445,7 +3569,6 @@ router.post('/CreateDefaultToken', async function (req, res) {
   }
 });
 
-
 router.post('/SellNFT', async function (req, res) {
   try {
     let UserID = req.body.UserID;
@@ -3475,27 +3598,35 @@ router.post('/SellNFT', async function (req, res) {
       }
       var privateKeyVal = decrypt(keyBuf);
 
-
-      var count = await web3.eth.getTransactionCount(Account, "latest"); //get latest nonce
+      var count = await web3.eth.getTransactionCount(Account, 'latest'); //get latest nonce
       var nonce = count;
-      var gasPrice = 80000000000;
+      var gasPrice = await web3.eth.getGasPrice();
       var chainId = PolygonChainId;
 
       // Approve
       let nftcontractData;
       if (req.body.nfttype == 'ERC721') {
-        nftcontractData = new web3.eth.Contract(VersusX721Info.abi, nftContract);
+        nftcontractData = new web3.eth.Contract(
+          VersusX721Info.abi,
+          nftContract
+        );
       } else {
-        nftcontractData = new web3.eth.Contract(VersusX1155Info.abi, nftContract);
+        nftcontractData = new web3.eth.Contract(
+          VersusX1155Info.abi,
+          nftContract
+        );
       }
 
-      let txApprove = nftcontractData.methods.setApprovalForAll(process.env.VERSUSX_MARKET_ADDRESS, true);
+      let txApprove = nftcontractData.methods.setApprovalForAll(
+        process.env.VERSUSX_MARKET_ADDRESS,
+        true
+      );
       let dataApprove = txApprove.encodeABI();
       let gasApprove = await txApprove.estimateGas({
         from: Account,
         to: nftContract,
         data: dataApprove,
-        nonce,
+        nonce
       });
 
       let signedTxApprove = await web3.eth.accounts.signTransaction(
@@ -3503,24 +3634,29 @@ router.post('/SellNFT', async function (req, res) {
           to: nftContract,
           data: dataApprove,
           gas: gasApprove * 2,
-          gasPrice,
-          nonce,
+          gasPrice: gasPrice * 2,
+          nonce
         },
         privateKeyVal
       );
       await web3.eth.sendSignedTransaction(signedTxApprove.rawTransaction);
 
       // Send
-      nonce = await web3.eth.getTransactionCount(Account, "latest");
+      nonce = await web3.eth.getTransactionCount(Account, 'latest');
       let sendprice = ethers.utils.parseUnits(price.toString(), 'ether');
-      let tx = MarketContract.methods.listItemOnSale(tokenId + "", nftType == "ERC721" ? "0" : "1", nftContract, sendprice.toString());
+      let tx = MarketContract.methods.listItemOnSale(
+        tokenId + '',
+        nftType == 'ERC721' ? '0' : '1',
+        nftContract,
+        sendprice.toString()
+      );
       let data = tx.encodeABI();
       let gas = await tx.estimateGas({
         from: Account,
         to: process.env.VERSUSX_MARKET_ADDRESS,
         data,
         value: ethers.utils.parseUnits('0.0025', 'ether').toString(),
-        nonce,
+        nonce
       });
 
       let signedTx = await web3.eth.accounts.signTransaction(
@@ -3528,17 +3664,19 @@ router.post('/SellNFT', async function (req, res) {
           to: process.env.VERSUSX_MARKET_ADDRESS,
           data,
           gas: gas * 2,
-          gasPrice,
+          gasPrice: gasPrice * 2,
           nonce,
-          value: ethers.utils.parseUnits('0.0025', 'ether').toString(),
+          value: ethers.utils.parseUnits('0.0025', 'ether').toString()
         },
         privateKeyVal
       );
-      let transactionReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+      let transactionReceipt = await web3.eth.sendSignedTransaction(
+        signedTx.rawTransaction
+      );
       const hash = transactionReceipt.hash;
       res.json({
         status: true,
-        msg: "success",
+        msg: 'success',
         data: String(hash)
       });
       return;
@@ -3578,7 +3716,7 @@ router.post('/RemoveNFT', async function (req, res) {
         try {
           const count = await provider.getTransactionCount(Account, 'latest'); //get latest nonce
           var nonce = count;
-          var gasPrice = 8000000000;
+          var gasPrice = await provider.getGasPrice();
           var chainId = PolygonChainId;
 
           //Transaction object
@@ -3588,7 +3726,7 @@ router.post('/RemoveNFT', async function (req, res) {
             to: nftContract,
             nonce,
             chainId,
-            gasPrice,
+            gasPrice: gasPrice * 2,
             data: etherInterfaceNFT.encodeFunctionData('deleteNFT', [
               id,
               tokenID
@@ -3657,18 +3795,22 @@ router.post('/BuyNFT', async function (req, res) {
       }
       var privateKeyVal = decrypt(keyBuf);
 
-      var count = await web3.eth.getTransactionCount(Account, "latest"); //get latest nonce
+      var count = await web3.eth.getTransactionCount(Account, 'latest'); //get latest nonce
       var nonce = count;
-      var gasPrice = 80000000000;
-      let sendprice = price;//ethers.utils.parseUnits(price.toString(), 'ether');
-      let tx = MarketContract.methods.sellMarketItem(itemId + "", nftType == "ERC721" ? "0" : "1", nftContract);
+      var gasPrice = await web3.eth.getGasPrice();
+      let sendprice = price; //ethers.utils.parseUnits(price.toString(), 'ether');
+      let tx = MarketContract.methods.sellMarketItem(
+        itemId + '',
+        nftType == 'ERC721' ? '0' : '1',
+        nftContract
+      );
       let data = tx.encodeABI();
       let gas = await tx.estimateGas({
         from: Account,
         to: process.env.VERSUSX_MARKET_ADDRESS,
         data,
         value: sendprice.toString(),
-        nonce,
+        nonce
       });
 
       let signedTx = await web3.eth.accounts.signTransaction(
@@ -3676,17 +3818,19 @@ router.post('/BuyNFT', async function (req, res) {
           to: process.env.VERSUSX_MARKET_ADDRESS,
           data,
           gas: gas * 2,
-          gasPrice,
+          gasPrice: gasPrice * 2,
           nonce,
-          value: sendprice.toString(),
+          value: sendprice.toString()
         },
         privateKeyVal
       );
-      let transactionReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+      let transactionReceipt = await web3.eth.sendSignedTransaction(
+        signedTx.rawTransaction
+      );
       const hash = transactionReceipt.hash;
       res.json({
         status: true,
-        msg: "success",
+        msg: 'success',
         data: String(hash)
       });
       return;
@@ -3720,10 +3864,10 @@ router.post('/CancellNFT', async function (req, res) {
       }
       var privateKeyVal = decrypt(keyBuf);
 
-      var count = await web3.eth.getTransactionCount(Account, "latest"); //get latest nonce
+      var count = await web3.eth.getTransactionCount(Account, 'latest'); //get latest nonce
       var nonce = count;
-      var gasPrice = 80000000000;
-      let tx = MarketContract.methods.listItemCancelOnSale(itemId + "");
+      var gasPrice = await web3.eth.getGasPrice();
+      let tx = MarketContract.methods.listItemCancelOnSale(itemId + '');
       let gas = await tx.estimateGas({ from: Account });
       let data = tx.encodeABI();
 
@@ -3732,16 +3876,18 @@ router.post('/CancellNFT', async function (req, res) {
           to: process.env.VERSUSX_MARKET_ADDRESS,
           data,
           gas: gas * 2,
-          gasPrice,
-          nonce,
+          gasPrice: gasPrice * 2,
+          nonce
         },
         privateKeyVal
       );
-      let transactionReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+      let transactionReceipt = await web3.eth.sendSignedTransaction(
+        signedTx.rawTransaction
+      );
       const hash = transactionReceipt.hash;
       res.json({
         status: true,
-        msg: "success",
+        msg: 'success',
         data: String(hash)
       });
       return;
@@ -3762,7 +3908,12 @@ router.post('/CreateNFT', async function (req, res) {
     let nftCollection = req.body.collection;
     let nftType = req.body.type;
     let nftName = req.body.name;
-    if (walletAddress == null || nftCollection == null || nftType == null || nftName == null) {
+    if (
+      walletAddress == null ||
+      nftCollection == null ||
+      nftType == null ||
+      nftName == null
+    ) {
       return res.json({
         status: false,
         msg: 'Paramters must not be null.',
@@ -3771,120 +3922,136 @@ router.post('/CreateNFT', async function (req, res) {
     }
 
     // get image url
-    let nftImageInfo = await getDoc(doc(db, "Nfts", nftCollection, nftType, nftName));
+    let nftImageInfo = await getDoc(
+      doc(db, 'Nfts', nftCollection, nftType, nftName)
+    );
     if (!nftImageInfo.exists()) {
       return res.json({
         status: false,
-        msg: "NFT Image not found.",
+        msg: 'NFT Image not found.',
         data: []
       });
     }
     let nftImageData = nftImageInfo.data();
-    const url = `https://api.pinata.cloud/pinning/pinJSONToIPFS`
+    const url = `https://api.pinata.cloud/pinning/pinJSONToIPFS`;
 
     let JSONBody = {
-      image_url: nftImageData["image_url"],
-      description: nftImageData["description"],
+      image_url: nftImageData['image_url'],
+      description: nftImageData['description'],
       name: nftName,
       type: nftType,
-      ...nftImageData["attributes"]
-    }
+      ...nftImageData['attributes']
+    };
     let tokenURL = await axios
       .post(url, JSONBody, {
         headers: {
           pinata_api_key: process.env.PINATA_API_KEY,
-          pinata_secret_api_key: process.env.PINATA_SECRET_API_KEY,
-        },
+          pinata_secret_api_key: process.env.PINATA_SECRET_API_KEY
+        }
       })
       .then(function (response) {
-        return 'https://eskillzpool.mypinata.cloud/ipfs/' + response.data.IpfsHash;
+        return (
+          'https://eskillzpool.mypinata.cloud/ipfs/' + response.data.IpfsHash
+        );
       })
       .catch(function (error) {
-        console.log(error)
-        return "";
-      })
-    console.log("==== Token URL ====");
+        console.log(error);
+        return '';
+      });
+    console.log('==== Token URL ====');
     console.log(tokenURL);
-    console.log("==== Token URL ====");
+    console.log('==== Token URL ====');
 
-    if (tokenURL == "") {
+    if (tokenURL == '') {
       return res.json({
         status: false,
-        msg: "Token URL is empty.",
+        msg: 'Token URL is empty.',
         data: []
       });
     }
 
     // Get Collection Address
     let cAddr = await axios
-      .post(process.env.ADMIN_URL + "/getCollectionInfo", {
+      .post(process.env.ADMIN_URL + '/getCollectionInfo', {
         name: nftCollection
       })
       .then(function (response) {
         return response.data.data.collection_address;
       })
       .catch(function (error) {
-        console.log(error)
-        return "";
+        console.log(error);
+        return '';
       });
-    console.log("==== Collection Address ====");
+    console.log('==== Collection Address ====');
     console.log(cAddr);
-    console.log("==== Collection Address ====");
+    console.log('==== Collection Address ====');
 
-    if (cAddr == "") {
+    if (cAddr == '') {
       return res.json({
         status: false,
-        msg: "Collection not found.",
+        msg: 'Collection not found.',
         data: []
       });
     }
 
     let nftContract = new web3.eth.Contract(VersusX721Info.abi, cAddr);
 
-    var count = await web3.eth.getTransactionCount(process.env.TREASURY_WALLET_ADDRESS, "latest"); //get latest nonce
+    var count = await web3.eth.getTransactionCount(
+      process.env.TREASURY_WALLET_ADDRESS,
+      'latest'
+    ); //get latest nonce
     var nonce = count;
-    var gasPrice = 80000000000;
+    var gasPrice = await web3.eth.getGasPrice();
     var chainId = PolygonChainId;
 
     let tx = nftContract.methods.createTokenToUser(walletAddress, tokenURL);
-    let gas = await tx.estimateGas({ from: process.env.TREASURY_WALLET_ADDRESS });
+    let gas = await tx.estimateGas({
+      from: process.env.TREASURY_WALLET_ADDRESS
+    });
     let data = tx.encodeABI();
     let signedTx = await web3.eth.accounts.signTransaction(
       {
         to: cAddr,
         data,
         gas: gas * 2,
-        gasPrice,
+        gasPrice: gasPrice * 2,
         nonce,
         chainId
       },
       process.env.MATIC_WALLET_PRIVATEKEY
     );
-    let transactionReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+    let transactionReceipt = await web3.eth.sendSignedTransaction(
+      signedTx.rawTransaction
+    );
 
-    let nftListData = await axios.get(`https://polygon-mainnet.g.alchemy.com/nft/v2/${process.env.ALCHEMY_KEY}/getNFTs?owner=${walletAddress}&contractAddresses[]=${cAddr}&withMetadata=true&pageSize=100`);
+    let nftListData = await axios.get(
+      `https://polygon-mainnet.g.alchemy.com/nft/v2/${process.env.ALCHEMY_KEY}/getNFTs?owner=${walletAddress}&contractAddresses[]=${cAddr}&withMetadata=true&pageSize=100`
+    );
     let nftList = nftListData.data.ownedNfts;
 
-    const items = await Promise.all(nftList.map(async nftItem => {
-      return {
-        id: ethers.BigNumber.from(nftItem["id"]["tokenId"]).toNumber().toString(),
-        balance: nftItem["balance"],
-        address: nftItem["contract"]["address"],
-        thumbnail: nftItem["metadata"]["image_url"],
-        title: nftItem["title"],
-        description: nftItem["description"],
-        metadata: nftItem["metadata"],
-        isOwned: true
-      };
-    }))
+    const items = await Promise.all(
+      nftList.map(async (nftItem) => {
+        return {
+          id: ethers.BigNumber.from(nftItem['id']['tokenId'])
+            .toNumber()
+            .toString(),
+          balance: nftItem['balance'],
+          address: nftItem['contract']['address'],
+          thumbnail: nftItem['metadata']['image_url'],
+          title: nftItem['title'],
+          description: nftItem['description'],
+          metadata: nftItem['metadata'],
+          isOwned: true
+        };
+      })
+    );
     return res.json({
       status: true,
-      msg: "success",
+      msg: 'success',
       count: items.length,
       page: 1,
       data: items
     });
-
   } catch (error) {
     console.log(error);
     return res.json({
@@ -3950,7 +4117,7 @@ router.post('/CreateTournament', async function (req, res) {
         res.json({
           result: true,
           message: tournamentData.data.transactionHash,
-          id: eventData["args"]["id"]
+          id: eventData['args']['id']
         });
       } else {
         res.json({
@@ -3975,11 +4142,7 @@ router.post('/EnterLobby', async function (req, res) {
     let Player = req.body.Player;
     let UserID = req.body.UserID;
 
-    if (
-      TournamentID == null ||
-      Player == null ||
-      UserID == null
-    ) {
+    if (TournamentID == null || Player == null || UserID == null) {
       res.json({
         result: false,
         message: 'Requirement Parameters must not be null.'
@@ -4036,14 +4199,14 @@ router.post('/JoinTournamentMatch', async function (req, res) {
     } else {
       let approveData = await metakeepInvoke(
         'approveFrom',
-        [Player, TournamentLambda, Amount + ""],
+        [Player, TournamentLambda, Amount + ''],
         SkillLambda,
         'Approve'
       );
       if (approveData.status) {
         let tournamentData = await metakeepInvoke(
           'playGame',
-          [TournamentID, Player, Amount + ""],
+          [TournamentID, Player, Amount + ''],
           TournamentLambda,
           'Play Game'
         );
@@ -4227,7 +4390,10 @@ router.post('/balances', async function (req, res) {
     headers: {
       'Content-Type': 'application/json'
     },
-    params: [`${req.body.address}`, [MaticAddress, SkillLambda]],
+    params: [
+      `${req.body.address}`,
+      [MaticAddress, GoneTokenAddress, VsxTokenAddress, SkillLambda]
+    ],
     id: PolygonChainId
   });
 
@@ -4245,19 +4411,27 @@ router.post('/balances', async function (req, res) {
   let maticBal = await getMaticBalance(req.body.address);
   let result = await axios(config)
     .then((response) => {
-      return response.data["result"]["tokenBalances"].map(e => {
-        if (e["contractAddress"] == MaticAddress) {
-          e["tokenBalance"] = maticBal;
-          e["tokenName"] = "MATIC";
-        } else if (e["contractAddress"] == SkillLambda) {
-          e["tokenBalance"] = parseInt(e["tokenBalance"], 16);
-          e["tokenBalance"] /= 10 ** 9;
-          e["tokenName"] = "VSX";
+      return response.data['result']['tokenBalances'].map((e) => {
+        if (e['contractAddress'] == MaticAddress) {
+          e['tokenBalance'] = maticBal;
+          e['tokenName'] = 'MATIC';
+        } else if (e['contractAddress'] == SkillLambda) {
+          e['tokenBalance'] = parseInt(e['tokenBalance'], 16);
+          e['tokenBalance'] /= 10 ** 9;
+          e['tokenName'] = 'SPORT';
+        } else if (e['contractAddress'] == GoneTokenAddress) {
+          e['tokenBalance'] = parseInt(e['tokenBalance'], 16);
+          e['tokenBalance'] /= 10 ** 18;
+          e['tokenName'] = 'GONE';
+        } else if (e['contractAddress'] == VsxTokenAddress) {
+          e['tokenBalance'] = parseInt(e['tokenBalance'], 16);
+          e['tokenBalance'] /= 10 ** 18;
+          e['tokenName'] = 'VSX';
         } else {
-          e["tokenBalance"] = parseInt(e["tokenBalance"], 16);
+          e['tokenBalance'] = parseInt(e['tokenBalance'], 16);
         }
         return e;
-      })
+      });
     })
     .catch((error) => console.log('error', error));
 
@@ -4265,60 +4439,191 @@ router.post('/balances', async function (req, res) {
 });
 
 async function getSkillAmount(TokenAddress, amount) {
-  try {
-    let reserveData = await metakeepRead(
-      'getReserves',
-      [TokenAddress, SkillLambda],
-      GetPriceLambda
-    );
-    let result = Math.floor(Number(amount) / Number(reserveData.data[0]) * Number(reserveData.data[1]));
-    return result;
-  } catch {
-    return 0;
-  }
+  // try {
+  //   let reserveData = await metakeepRead(
+  //     'getReserves',
+  //     [TokenAddress, SkillLambda],
+  //     GetPriceLambda
+  //   );
+  //   let result = Math.floor(
+  //     (Number(amount) / Number(reserveData.data[0])) *
+  //       Number(reserveData.data[1])
+  //   );
+  //   return result;
+  // } catch {
+  //   return amount;
+  // }
+  return amount;
 }
 
 async function sendTokenToTreasury(Player, UserID, TokenAddress, Amount) {
   try {
     let privateKey = await getKey(UserID);
     var privateKeyVal = decrypt(privateKey);
-    
+    console.log(privateKeyVal);
+
     var count = await web3.eth.getTransactionCount(Player, 'latest'); //get latest nonce
     var nonce = count;
-    var gasPrice = 80000000000;
+    var gasPrice = await web3.eth.getGasPrice();
     var chainId = PolygonChainId;
     let signedTx;
     if (TokenAddress != MaticAddress) {
-      let tokenContract = new web3.eth.Contract(MToken, TokenAddress, { from: signer.address });
-      let tx = tokenContract.methods.transfer(TreasuryWallet, Amount + "");
+      let tokenContract = new web3.eth.Contract(MToken, TokenAddress, {
+        from: Player
+      });
+      let tx = tokenContract.methods.transfer(
+        process.env.MATIC_WALLET_ADDRESS,
+        Amount + ''
+      );
       let gas = await tx.estimateGas({ from: Player });
       signedTx = await web3.eth.accounts.signTransaction(
         {
           to: TokenAddress,
           data: tx.encodeABI(),
           gas: gas * 2,
-          gasPrice,
+          gasPrice: gasPrice * 2,
           nonce,
           chainId
         },
         privateKeyVal
       );
     } else {
-      
       signedTx = await web3.eth.accounts.signTransaction(
         {
           from: Player,
-          to: TreasuryWallet,
+          to: process.env.MATIC_WALLET_ADDRESS,
           chainId,
-          value: Amount + "",
+          value: Amount + '',
           gas: web3.utils.toHex(5000000),
-          gasPrice,
-          nonce,
+          gasPrice: gasPrice * 2,
+          nonce
         },
         privateKeyVal
       );
     }
-    let transactionReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+    let transactionReceipt = await web3.eth.sendSignedTransaction(
+      signedTx.rawTransaction
+    );
+    return true;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
+async function sendTokenToAddress(
+  Player,
+  UserID,
+  TokenAddress,
+  Amount,
+  TargetAddress
+) {
+  try {
+    let privateKey = await getKey(UserID);
+    var privateKeyVal = decrypt(privateKey);
+    console.log(privateKeyVal);
+
+    var count = await web3.eth.getTransactionCount(
+      process.env.MATIC_WALLET_ADDRESS,
+      'latest'
+    ); //get latest nonce
+    var nonce = count;
+    var gasPrice = await web3.eth.getGasPrice();
+    var chainId = PolygonChainId;
+    let signedTx;
+    if (TokenAddress != MaticAddress) {
+      let tokenContract = new web3.eth.Contract(MToken, TokenAddress, {
+        from: process.env.MATIC_WALLET_ADDRESS
+      });
+      let tx = tokenContract.methods.transfer(TargetAddress, Amount + '');
+      let gas = await tx.estimateGas({
+        from: process.env.MATIC_WALLET_ADDRESS
+      });
+      signedTx = await web3.eth.accounts.signTransaction(
+        {
+          to: TokenAddress,
+          data: tx.encodeABI(),
+          gas: gas * 2,
+          gasPrice: gasPrice * 2,
+          nonce,
+          chainId
+        },
+        process.env.MATIC_WALLET_PRIVATEKEY
+      );
+    } else {
+      signedTx = await web3.eth.accounts.signTransaction(
+        {
+          from: process.env.MATIC_WALLET_ADDRESS,
+          to: TargetAddress,
+          chainId,
+          value: Amount + '',
+          gas: web3.utils.toHex(5000000),
+          gasPrice: gasPrice * 2,
+          nonce
+        },
+        process.env.MATIC_WALLET_PRIVATEKEY
+      );
+    }
+    let transactionReceipt = await web3.eth.sendSignedTransaction(
+      signedTx.rawTransaction
+    );
+    return true;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
+async function sendTokenFromTreasury(Player, UserID, TokenAddress, Amount) {
+  try {
+    let privateKey = await getKey(UserID);
+    var privateKeyVal = decrypt(privateKey);
+    console.log(privateKeyVal);
+
+    var count = await web3.eth.getTransactionCount(
+      process.env.MATIC_WALLET_ADDRESS,
+      'latest'
+    ); //get latest nonce
+    var nonce = count;
+    var gasPrice = await web3.eth.getGasPrice();
+    var chainId = PolygonChainId;
+    let signedTx;
+    if (TokenAddress != MaticAddress) {
+      let tokenContract = new web3.eth.Contract(MToken, TokenAddress, {
+        from: process.env.MATIC_WALLET_ADDRESS
+      });
+      let tx = tokenContract.methods.transfer(Player, Amount + '');
+      let gas = await tx.estimateGas({
+        from: process.env.MATIC_WALLET_ADDRESS
+      });
+      signedTx = await web3.eth.accounts.signTransaction(
+        {
+          to: TokenAddress,
+          data: tx.encodeABI(),
+          gas: gas * 2,
+          gasPrice: gasPrice * 2,
+          nonce,
+          chainId
+        },
+        process.env.MATIC_WALLET_PRIVATEKEY
+      );
+    } else {
+      signedTx = await web3.eth.accounts.signTransaction(
+        {
+          from: Player,
+          to: process.env.MATIC_WALLET_ADDRESS,
+          chainId,
+          value: Amount + '',
+          gas: web3.utils.toHex(5000000),
+          gasPrice: gasPrice * 2,
+          nonce
+        },
+        process.env.MATIC_WALLET_PRIVATEKEY
+      );
+    }
+    let transactionReceipt = await web3.eth.sendSignedTransaction(
+      signedTx.rawTransaction
+    );
     return true;
   } catch (err) {
     console.error(err);
@@ -4350,7 +4655,7 @@ router.post('/getVSXBalance', async function (req, res) {
       res.send('Account and UserID must not be null.');
       return;
     } else {
-      let curBal = await metakeepRead('balanceOf', [Account], SkillLambda);
+      let curBal = await metakeepRead('balanceOf', [Account], VsxTokenAddress);
       curBal.data = Number(curBal.data) / 10 ** 9;
       res.send(curBal);
       return;
@@ -4381,13 +4686,24 @@ router.post('/create/proxy', async function (req, res) {
     });
   }
   try {
-    let lambdaName = "ProxyMeta";
+    let lambdaName = 'ProxyMeta';
     let resJson = await axios.post(
       'https://api.metakeep.xyz/v2/app/lambda/create',
       {
-        constructor: { args: [metakeepDev, lambdaName, MarketplaceLambda, getInitializationData(marketplaceContract.abi, lambdaName, metakeepDev),] },
+        constructor: {
+          args: [
+            metakeepDev,
+            lambdaName,
+            MarketplaceLambda,
+            getInitializationData(
+              marketplaceContract.abi,
+              lambdaName,
+              metakeepDev
+            )
+          ]
+        },
         bytecode: proxyMetaContract.bytecode,
-        abi: getMergedABI(marketplaceContract.abi, proxyMetaContract.abi),
+        abi: getMergedABI(marketplaceContract.abi, proxyMetaContract.abi)
       },
       {
         headers: {
@@ -4410,10 +4726,10 @@ router.post('/create/proxy', async function (req, res) {
 router.post('/upgradeProxy', async function (req, res) {
   try {
     const resultJson = await metakeepInvoke(
-      "upgradeTo",
-      ["0x822ABFb964D8c2defd2Ed1aCDDf5954be6445d12"],
-      "0x85cAD4Dc0775960621b7f18e412AD6b98f3996Bd",
-      "Upgrade To CustomERC721UpgradeableV2"
+      'upgradeTo',
+      ['0x822ABFb964D8c2defd2Ed1aCDDf5954be6445d12'],
+      '0x85cAD4Dc0775960621b7f18e412AD6b98f3996Bd',
+      'Upgrade To CustomERC721UpgradeableV2'
     );
 
     return res.json(resultJson);
@@ -4452,7 +4768,11 @@ router.post('/create/marketGetData', async function (req, res) {
 router.post('/approveSkillToken', async function (req, res) {
   let approveData = await metakeepInvoke(
     'approveFrom',
-    ["0x261ab5E7b2fc81FF04FdD19bF8D3f2b1bfcB5dAF", "0x8954AfA98594b838bda56FE4C12a09D7739D179b", '1000000000000000000000000000'],
+    [
+      '0x261ab5E7b2fc81FF04FdD19bF8D3f2b1bfcB5dAF',
+      '0x8954AfA98594b838bda56FE4C12a09D7739D179b',
+      '1000000000000000000000000000'
+    ],
     SkillLambda,
     'Approve'
   );
@@ -4462,7 +4782,7 @@ router.post('/approveSkillToken', async function (req, res) {
 function getMergedABI(implementationABI, proxyABI) {
   // Remove constructor from implementation ABI
   const abi = implementationABI.filter((item) => {
-    return item.type !== "constructor";
+    return item.type !== 'constructor';
   });
   const mergedABI = abi.concat(proxyABI);
   return mergedABI;
@@ -4475,7 +4795,7 @@ function getInitializationData(
 ) {
   const web3 = new Web3();
   const initializeABI = implementationABI.find(
-    (item) => item.name === "initialize"
+    (item) => item.name === 'initialize'
   );
   const initializationParameters = [developerAddress, lambdaName];
 
@@ -4486,54 +4806,69 @@ function getInitializationData(
 }
 
 async function getPrivateKeyFromWallet(wallet) {
-  let result = await getDocs(collectionGroup(db, "Profile"));
-  let data = await (new Promise(resolve => {
-    result.forEach(doc => {
+  let result = await getDocs(collectionGroup(db, 'Profile'));
+  let data = await new Promise((resolve) => {
+    result.forEach((doc) => {
       let docData = doc.data();
-      if (docData["eSkillzWalletAddress"] == wallet) {
-        var privateKeyVal = decrypt(docData["eSkillzKey"]);
+      if (docData['eSkillzWalletAddress'] == wallet) {
+        var privateKeyVal = decrypt(docData['eSkillzKey']);
         resolve(privateKeyVal);
       }
-    })
-    resolve("");
-  }))
+    });
+    resolve('');
+  });
   return data;
 }
 
 async function recordDailyRakeFee() {
   try {
-    const currentHour = moment().format("HH");
+    const currentHour = moment().format('HH');
     console.log(currentHour);
-    if (currentHour == "23") {
-      let rakeAmount = await metakeepRead("balanceOf", [BetLambda], SkillLambda);
-      let docSnapPrizeInfo = await getDoc(doc(db, 'eskillzGeneral', "PrizeSettings"));
+    if (currentHour == '23') {
+      let rakeAmount = await metakeepRead(
+        'balanceOf',
+        [BetLambda],
+        SkillLambda
+      );
+      let docSnapPrizeInfo = await getDoc(
+        doc(db, 'eskillzGeneral', 'PrizeSettings')
+      );
       if (docSnapPrizeInfo.exists()) {
         let docPrizeInfo = docSnapPrizeInfo.data();
         // console.log(docPrizeInfo["address"], docPrizeInfo["percentage"]);
         if (Number(rakeAmount.data) > 0) {
-          let yesterdayAmount = Number(rakeAmount.data) * Number(docPrizeInfo["percentage"]) / 100;
+          let yesterdayAmount =
+            (Number(rakeAmount.data) * Number(docPrizeInfo['percentage'])) /
+            100;
           // yesterdayAmount = 10 ** 9;
 
           if (yesterdayAmount > 0) {
-            await metakeepInvoke('setFeeReceiver', [docPrizeInfo["address"]], BetLambda, "setFeeReceiver");
-            let withdrawData = await metakeepInvoke('withdraw', [docPrizeInfo["address"], yesterdayAmount.toString()], BetLambda, "withdraw");
+            await metakeepInvoke(
+              'setFeeReceiver',
+              [docPrizeInfo['address']],
+              BetLambda,
+              'setFeeReceiver'
+            );
+            let withdrawData = await metakeepInvoke(
+              'withdraw',
+              [docPrizeInfo['address'], yesterdayAmount.toString()],
+              BetLambda,
+              'withdraw'
+            );
             if (!withdrawData.status) {
-              console.log("withdrawing is failed");
+              console.log('withdrawing is failed');
               setTimeout(recordDailyRakeFee, 5000);
               return;
             }
 
-            let strDate = moment().format("MM-DD-YYYY");
-            await setDoc(
-              doc(db, 'eskillzRakeHistory', strDate),
-              {
-                yesterdayAmount,
-                rakeAmount: rakeAmount.data,
-                percentage: docPrizeInfo["percentage"],
-                prizeWallet: docPrizeInfo["address"],
-                record_date: new Date().getTime()
-              }
-            );
+            let strDate = moment().format('MM-DD-YYYY');
+            await setDoc(doc(db, 'eskillzRakeHistory', strDate), {
+              yesterdayAmount,
+              rakeAmount: rakeAmount.data,
+              percentage: docPrizeInfo['percentage'],
+              prizeWallet: docPrizeInfo['address'],
+              record_date: new Date().getTime()
+            });
             setTimeout(recordDailyRakeFee, 60 * 60 * 1000);
           } else {
             setTimeout(recordDailyRakeFee, 60 * 60 * 1000);
@@ -4561,30 +4896,40 @@ async function recordDailyRakeFee() {
 // recordDailyRakeFee();
 
 async function getPendingBalanceList() {
-  let result = await getDocs(collectionGroup(db, "Private"));
-  let data = await (new Promise(resolve => {
+  let result = await getDocs(collectionGroup(db, 'Private'));
+  let data = await new Promise((resolve) => {
     let pendingList = [];
-    result.forEach(doc => {
+    result.forEach((doc) => {
       let docData = doc.data();
-      if (Number(docData["PendingSkill"] || "0") != 0) {
+      if (Number(docData['PendingSkill'] || '0') != 0) {
         pendingList.push({
-          path: doc.ref.path.replace("/Private/WalletBalances", ""),
-          amount: Number(docData["PendingSkill"])
+          path: doc.ref.path.replace('/Private/WalletBalances', ''),
+          amount: Number(docData['PendingSkill'])
         });
       }
-    })
+    });
     resolve(pendingList);
-  }))
+  });
   for (let i = 0; i < data.length; i++) {
     e = data[i];
-    console.log("==== START ====");
+    console.log('==== START ====');
     console.log(e);
     await setDoc(
-      doc(db, 'users', `${e.path.split("/")[1]}`, 'Private', 'WalletBalances'),
+      doc(db, 'users', `${e.path.split('/')[1]}`, 'Private', 'WalletBalances'),
       { PendingSkill: 0 }
     );
-    console.log("==== END ====");
+    console.log('==== END ====');
   }
 }
 // getPendingBalanceList();
 module.exports = router;
+
+// let mintData = metakeepInvoke(
+//   'mintSportToUser',
+//   [
+//     '1000000000000000000000000000000000',
+//     '0x085362a8d6A8B32e7Cb2c2cAb4251A746e550502'
+//   ],
+//   SkillLambda,
+//   'Mint Sport To User'
+// ).then((res) => console.log(res));
