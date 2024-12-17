@@ -84,7 +84,7 @@ router.post("/sendVerifyCode", async (req, res) => {
   const password = req.body.password;
   var dateTime = new Date();
   try {
-    var code = md5(userName + password + email + new Date().toISOString())
+    var code = "123"
 
     var rows = await knex('tbl_users').where('mail', email).select('*')
 
