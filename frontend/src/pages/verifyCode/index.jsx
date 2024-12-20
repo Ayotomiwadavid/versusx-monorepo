@@ -91,10 +91,10 @@ const Register = () => {
       userName,
     });
     
-     var verifyCode = "3ef0232803086d7fbce80ec2d88f84fd";
-     const res = await axios.post("/api/user/checkVerifyCode", { email, verifyCode });
+   // var verifyCode = "3ef0232803086d7fbce80ec2d88f84fd";
+   //  const res = await axios.post("/api/user/checkVerifyCode", { email, verifyCode });
     console.log("result", res.data);
-    dispatch(authActions.register(navigate, email, password,userName,value.toString(),file,storageRef,firebase));
+   // dispatch(authActions.register(navigate, email, password,userName,value.toString(),file,storageRef,firebase));
   };
   const handleSignin = async () => {
     dispatch(authActions.login(navigate, auth, email, password));
