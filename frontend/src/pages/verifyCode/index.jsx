@@ -85,11 +85,11 @@ const Register = () => {
     }
     //setBtnDisabled(1);
 
-    //const res = await axios.post("/api/user/sendVerifyCode", {
-      //email,
-      //password,
-      //userName,
-    //});
+    const res = await axios.post("/api/user/sendVerifyCode", {
+      email,
+      password,
+      userName,
+    });
     
     // var verifyCode = "3ef0232803086d7fbce80ec2d88f84fd";
     // const res = await axios.post("/api/user/checkVerifyCode", { email, verifyCode });
