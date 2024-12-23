@@ -46,6 +46,10 @@ const Register = () => {
   const [verifyCode, setVerifyCode] = useState("");
   const [btnDisabled, setBtnDisabled] = useState(false);
   const [confirmBtnDisabled, setConfirmBtnDisabled] = useState(0);
+
+  //USEEFFECT FOR SIGNED UP USER CREDENTIALS
+  const [newUserCredentials, setNewUserCredentials] = useState({});
+
   const isValidEmail = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/g;
 
   const [size, setSize] = useState([0, 0]);
@@ -121,6 +125,10 @@ const Register = () => {
     setLoading(false);
 
     console.log("result", res.data);
+
+    const {userCredential} = res.data
+
+    setNewUserCredentials(userCredential);
   };
 
   const endLoading = () => {
@@ -131,7 +139,8 @@ const Register = () => {
     setLoading(true);
     const res = await axios.post("/api/user/checkVerifyCode", {
       email,
-      verifyCode,
+      // verifyCode,
+      newUserCredentials,
     });
     console.log("result", res.data);
     if (res.data == 2) {
