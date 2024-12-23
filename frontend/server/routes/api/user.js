@@ -80,16 +80,17 @@ router.post("/signup", async (req, res) => {
 
 router.post("/sendVerifyCode", async (req, res) => {
 
-  const {email, newUserCredentials} = req.body
+  const {email, password, userName} = req.body
 
-
-  const userName = req.body.userName;
-  const password = req.body.password;
   var dateTime = new Date();
 
   try {
-    
-    await sendEmailVerification(newUserCredentials);
+
+    const userResponse = await admin.auth().createUserWithEmailAndPassword(email, password);
+
+    const userCredential = userResponse.user
+
+    await sendEmailVerification(userCredential);
 
     console.log('Verification email sent to:', email);
 
