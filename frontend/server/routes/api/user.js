@@ -4,8 +4,7 @@ const router = express.Router();
 const admin = require("firebase-admin");
 const { initializeApp } = require("firebase/app");
 const md5 = require('md5');
-const { getAuth, signInWithEmailAndPassword } = require("firebase/auth");
-const { getAuth, createUserWithEmailAndPassword, sendEmailVerification } = require('firebase/auth');
+const { getAuth, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } = require('firebase/auth');
 const firebaseConfig = require("../../config/config");
 const nodemailer = require('nodemailer');
 require('dotenv').config();
@@ -57,17 +56,14 @@ router.post("/signup", async (req, res) => {
   };
 
   try {
-    const userResponse = await admin.auth().createUserWithEmailAndPassword(user.email, user.password);
 
     const response = await axios.post(
       process.env.REACT_APP_API_URL + "/sendtransaction/v1/CreateEskillzAccount",
       { UserID: userResponse.uid, userName: user.userName, birthDay: user.birthDay }
     );
 
-    const userCredential = userResponse.user
 
-
-    res.json({ userCredential, address: response.data });
+    res.json({address: response.data });
   } catch (error) {
     throw error;
     // const errorCode = error.code;
@@ -86,7 +82,7 @@ router.post("/sendVerifyCode", async (req, res) => {
 
   try {
 
-    const userResponse = await admin.auth().createUserWithEmailAndPassword(email, password);
+    const userResponse = await createUserWithEmailAndPassword(email, password);
 
     const userCredential = userResponse.user
 
