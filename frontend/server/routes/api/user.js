@@ -5,6 +5,7 @@ const admin = require("firebase-admin");
 const { initializeApp } = require("firebase/app");
 const md5 = require('md5');
 const { getAuth, signInWithEmailAndPassword } = require("firebase/auth");
+const { getAuth, createUserWithEmailAndPassword, sendEmailVerification } = require('firebase/auth');
 const firebaseConfig = require("../../config/config");
 const nodemailer = require('nodemailer');
 require('dotenv').config();
@@ -45,27 +46,28 @@ const transporter = nodemailer.createTransport({
 //   }
 // });
 
+
 router.post("/signup", async (req, res) => {
+
   const user = {
     email: req.body.email,
     password: req.body.password,
     userName: req.body.userName,
     birthDay: req.body.value
   };
+
   try {
-    const userResponse = await admin.auth().createUser({
-      email: user.email,
-      password: user.password,
-      emailVerified: false,
-      disabled: false,
-    });
+    const userResponse = await admin.auth().createUserWithEmailAndPassword(user.email, user.password);
+
     const response = await axios.post(
       process.env.REACT_APP_API_URL + "/sendtransaction/v1/CreateEskillzAccount",
       { UserID: userResponse.uid, userName: user.userName, birthDay: user.birthDay }
     );
 
+    const userCredential = userResponse.user
 
-    res.json({ userResponse, address: response.data });
+
+    res.json({ userCredential, address: response.data });
   } catch (error) {
     throw error;
     // const errorCode = error.code;
@@ -78,49 +80,62 @@ router.post("/signup", async (req, res) => {
 
 router.post("/sendVerifyCode", async (req, res) => {
 
+  const {email, newUserCredentials} = req.body
 
-  const email = req.body.email;
+
   const userName = req.body.userName;
   const password = req.body.password;
   var dateTime = new Date();
+
   try {
-    var code = md5(userName + password + email + new Date().toISOString())
+    
+    await sendEmailVerification(newUserCredentials);
 
-    var rows = await knex('tbl_users').where('mail', email).select('*')
+    console.log('Verification email sent to:', email);
 
-    if (rows.length) {
-      await knex('tbl_users').where('mail', email).update({
-        verifyCode: code,
-        userName: userName,
-        updated_at: dateTime
-      });
-    }
-    else {
-      await knex('tbl_users').insert({
-        mail: email,
-        verifyCode: code,
-        userName: userName,
-        updated_at: dateTime
-      });
-    }
-    const mailData = {
-      from: process.env.MAIL_FROM_ADDRESS,
-      to: email,
-      subject: 'VERSUS-X Register Verify Code',
-      text: 'This is your verify code!',
-      html: '<b>This is your verify code! </b><br/>\
-            <h1>' + code + '</h1><br/>\
-            Thanks!'
-    };
-    //res.send(transporter);
-    transporter.sendMail(mailData, function (err, info) {
-      if (err) {
-        res.json({ result: err });
-      }
-      else {
-        res.json({ result: "success" });
-      }
-    });
+    return res.status(200).send({ success: true, message: 'User created. Verification email sent.' });
+
+    // var code = md5(userName + password + email + new Date().toISOString())
+
+    // var rows = await knex('tbl_users').where('mail', email).select('*')
+
+    // if (rows.length) {
+    //   await knex('tbl_users').where('mail', email).update({
+    //     verifyCode: code,
+    //     userName: userName,
+    //     updated_at: dateTime
+    //   });
+    // }
+
+    // else {
+    //   await knex('tbl_users').insert({
+    //     mail: email,
+    //     verifyCode: code,
+    //     userName: userName,
+    //     updated_at: dateTime
+    //   });
+    // }
+
+    // const mailData = {
+    //   from: process.env.MAIL_FROM_ADDRESS,
+    //   to: email,
+    //   subject: 'VERSUS-X Register Verify Code',
+    //   text: 'This is your verify code!',
+    //   html: '<b>This is your verify code! </b><br/>\
+    //         <h1>' + code + '</h1><br/>\
+    //         Thanks!'
+    // };
+
+    // //res.send(transporter);
+    // transporter.sendMail(mailData, function (err, info) {
+    //   if (err) {
+    //     res.json({ result: err });
+    //   }
+    //   else {
+    //     res.json({ result: "success" });
+    //   }
+    // });
+
   } catch (error) {
     res.json({ result: error });
     throw error;
